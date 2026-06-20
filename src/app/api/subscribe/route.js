@@ -24,7 +24,7 @@ export async function POST(request) {
     body: JSON.stringify({
       email,
       amount: 500 * 100,
-      currency: "GHS",
+      currency: "XOF",
       callback_url: `${baseUrl}/paiement-confirme`,
       metadata: {
         comedian_id: comedianId,

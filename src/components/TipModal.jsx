@@ -13,7 +13,7 @@ export default function TipModal({ comedian, onClose }) {
 
   const finalAmount = custom ? parseInt(custom) : selected;
 
-  async function handlePay() {
+ async function handlePay() {
   if (!email || !finalAmount) return;
   setStep("loading");
   try {
@@ -29,14 +29,14 @@ export default function TipModal({ comedian, onClose }) {
     });
     const { authorizationUrl, error } = await res.json();
     if (error) throw new Error(error);
-    // Redirect full page to Paystack
-    window.location.href = authorizationUrl;
+    // Save return path and payment type
+    sessionStorage.setItem("payment_return_path", window.location.pathname);
+    window.location.href = authorizationUrl + "&type=tip";
   } catch (err) {
     setErrorMsg(err.message);
     setStep("error");
   }
 }
-
 
   return (
     <div

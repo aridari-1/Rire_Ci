@@ -11,7 +11,7 @@ import VideoCard from "@/components/VideoCard";
 export default function ComedianProfile({ params }) {
   const { slug } = use(params);
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const [comedian, setComedian] = useState(null);
   const [videos, setVideos] = useState([]);
@@ -20,9 +20,8 @@ export default function ComedianProfile({ params }) {
   const [showTip, setShowTip] = useState(false);
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
 
-  useEffect(() => { fetchComedian(); }, [slug]);
+  useEffect(() => { fetchComedian(); }, [slug, user]);
 
   async function fetchComedian() {
     setLoading(true);
@@ -30,6 +29,22 @@ export default function ComedianProfile({ params }) {
       .from("comedians").select("*").eq("slug", slug).single();
 
     if (!comedianData) { setLoading(false); return; }
+
+    // Check if current user has an active subscription
+    if (user) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const email = sessionData?.session?.user?.email;
+      if (email) {
+        const { data: subData } = await supabase
+          .from("subscriptions")
+          .select("id")
+          .eq("comedian_id", comedianData.id)
+          .eq("email", email)
+          .eq("status", "active")
+          .single();
+        if (subData) setIsSubscribed(true);
+      }
+    }
 
     const { data: videoData } = await supabase
       .from("videos").select("*")
@@ -42,7 +57,9 @@ export default function ComedianProfile({ params }) {
       .eq("comedian_id", comedianData.id).eq("status", "active");
 
     const { data: tipData } = await supabase
-      .from("tips").select("amount").eq("comedian_id", comedianData.id);
+      .from("tips").select("amount")
+      .eq("comedian_id", comedianData.id)
+      .eq("status", "completed");
 
     const totalTips = tipData?.reduce((sum, t) => sum + t.amount, 0) || 0;
 
@@ -64,7 +81,7 @@ export default function ComedianProfile({ params }) {
 
   if (!comedian) return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-      <i className="ti ti-mood-sad" style={{ fontSize: 40, color: "var(--text-3)" }} />
+      <i className="ti ti-mood-sad" style={{ fontSize: 40, color: "var(--text-3)" }} aria-hidden="true" />
       <p style={{ color: "var(--text-2)" }}>Comédien introuvable.</p>
       <button onClick={() => router.push("/")} style={{ padding: "10px 20px", borderRadius: 8, background: "var(--accent)", color: "#fff", border: "none", fontWeight: 600 }}>Retour</button>
     </div>
@@ -178,9 +195,9 @@ export default function ComedianProfile({ params }) {
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: "var(--border)", borderRadius: 12, overflow: "hidden", marginBottom: 20 }}>
           {[
-            { label: "Abonnés", value: comedian.subscribers.toLocaleString("fr-FR"), icon: "ti-star" },
-            { label: "Tips reçus", value: `${comedian.totalTips} F`, icon: "ti-coin" },
-            { label: "Vidéos", value: comedian.videoCount, icon: "ti-video" },
+            { label: "Abonnés", value: comedian.subscribers.toLocaleString("fr-FR") },
+            { label: "Tips reçus", value: `${comedian.totalTips} F` },
+            { label: "Vidéos", value: comedian.videoCount },
           ].map((stat) => (
             <div key={stat.label} style={{ background: "var(--bg-2)", padding: "14px 8px", textAlign: "center" }}>
               <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-1)" }}>{stat.value}</p>
@@ -189,7 +206,7 @@ export default function ComedianProfile({ params }) {
           ))}
         </div>
 
-        {/* Fan pass banner */}
+        {/* Fan pass banner — only if not subscribed */}
         {!isSubscribed && (
           <div
             onClick={() => setShowSubscribe(true)}
@@ -207,6 +224,17 @@ export default function ComedianProfile({ params }) {
             <div style={{ textAlign: "right", flexShrink: 0 }}>
               <p style={{ fontSize: 15, fontWeight: 700, color: "var(--accent)" }}>500 F</p>
               <p style={{ fontSize: 10, color: "var(--text-3)" }}>/mois</p>
+            </div>
+          </div>
+        )}
+
+        {/* Subscribed badge */}
+        {isSubscribed && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "rgba(255,69,0,0.06)", border: "0.5px solid rgba(255,69,0,0.3)", marginBottom: 20 }}>
+            <i className="ti ti-star-filled" style={{ fontSize: 18, color: "var(--accent)" }} aria-hidden="true" />
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)" }}>Fan Pass actif</p>
+              <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Tu as accès à tout le contenu exclusif</p>
             </div>
           </div>
         )}
@@ -256,13 +284,35 @@ export default function ComedianProfile({ params }) {
         ))}
       </div>
 
-      {/* Empty state */}
-      {(activeTab === "videos" ? publicVideos : exclusiveVideos).length === 0 && (
+      {/* Empty states */}
+      {activeTab === "videos" && publicVideos.length === 0 && (
         <div style={{ textAlign: "center", padding: "48px 16px", color: "var(--text-3)" }}>
-          <i className={`ti ${activeTab === "exclusif" ? "ti-lock" : "ti-video-off"}`} style={{ fontSize: 36 }} aria-hidden="true" />
-          <p style={{ marginTop: 10, fontSize: 14 }}>
-            {activeTab === "exclusif" ? "Aucune vidéo exclusive pour l'instant." : "Aucune vidéo pour l'instant."}
+          <i className="ti ti-video-off" style={{ fontSize: 36 }} aria-hidden="true" />
+          <p style={{ marginTop: 10, fontSize: 14 }}>Aucune vidéo pour l'instant.</p>
+        </div>
+      )}
+
+      {activeTab === "exclusif" && exclusiveVideos.length === 0 && (
+        <div style={{ textAlign: "center", padding: "48px 16px", color: "var(--text-3)" }}>
+          <i className="ti ti-lock" style={{ fontSize: 36 }} aria-hidden="true" />
+          <p style={{ marginTop: 10, fontSize: 14 }}>Aucune vidéo exclusive pour l'instant.</p>
+        </div>
+      )}
+
+      {/* Exclusive upsell when not subscribed and locked videos exist */}
+      {activeTab === "exclusif" && exclusiveVideos.length > 0 && !isSubscribed && (
+        <div style={{ margin: "0 16px 24px", padding: "20px", borderRadius: 14, background: "var(--bg-2)", border: "0.5px solid var(--border)", textAlign: "center" }}>
+          <i className="ti ti-crown" style={{ fontSize: 28, color: "var(--accent)" }} aria-hidden="true" />
+          <p style={{ fontSize: 15, fontWeight: 600, marginTop: 10 }}>Contenu réservé aux fans</p>
+          <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 6, lineHeight: 1.6 }}>
+            Abonne-toi pour 500 F/mois et accède à toutes les vidéos exclusives.
           </p>
+          <button
+            onClick={() => setShowSubscribe(true)}
+            style={{ marginTop: 16, padding: "12px 28px", borderRadius: 10, background: "var(--accent)", color: "#fff", border: "none", fontSize: 14, fontWeight: 600 }}
+          >
+            Obtenir le Fan Pass
+          </button>
         </div>
       )}
 

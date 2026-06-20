@@ -5,11 +5,29 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 
+// ─── Commission rates ─────────────────────────────────────────────────────────
+const TIP_PLATFORM_CUT = 0.07;   // rire.ci takes 7%
+const TIP_COMEDIAN_SHARE = 0.93; // comedian keeps 93%
+const SUB_PLATFORM_CUT = 0.15;   // rire.ci takes 15%
+const SUB_COMEDIAN_SHARE = 0.85; // comedian keeps 85%
+const SUB_PRICE = 500;           // Fan Pass price in FCFA
+
 export default function Dashboard() {
   const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
+
   const [comedian, setComedian] = useState(null);
-  const [stats, setStats] = useState({ totalTips: 0, totalSubscribers: 0, totalVideos: 0, balance: 0 });
+  const [stats, setStats] = useState({
+    totalTips: 0,
+    tipsNet: 0,
+    tipsPlatformCut: 0,
+    totalSubscribers: 0,
+    subsGross: 0,
+    subsNet: 0,
+    subsPlatformCut: 0,
+    totalVideos: 0,
+    balance: 0,
+  });
   const [recentTips, setRecentTips] = useState([]);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,32 +42,61 @@ export default function Dashboard() {
   }, [user]);
 
   async function fetchDashboard() {
-  setLoading(true);
-  const { data: comedianData } = await supabase
-    .from("comedians").select("*").eq("user_id", user.id).single();
+    setLoading(true);
 
-  if (!comedianData) { setLoading(false); return; }
+    // Fetch comedian linked to this user account
+    const { data: comedianData } = await supabase
+      .from("comedians").select("*").eq("user_id", user.id).single();
 
-  const { data: tipsData } = await supabase.from("tips").select("*")
-    .eq("comedian_id", comedianData.id).eq("status", "completed")
-    .order("created_at", { ascending: false });
+    if (!comedianData) { setLoading(false); return; }
 
-  const { count: subCount } = await supabase.from("subscriptions")
-    .select("*", { count: "exact", head: true })
-    .eq("comedian_id", comedianData.id).eq("status", "active");
+    // Completed tips only
+    const { data: tipsData } = await supabase
+      .from("tips").select("*")
+      .eq("comedian_id", comedianData.id)
+      .eq("status", "completed")
+      .order("created_at", { ascending: false });
 
-  const { data: videosData } = await supabase.from("videos").select("*")
-    .eq("comedian_id", comedianData.id).order("created_at", { ascending: false });
+    // Active subscriptions
+    const { count: subCount } = await supabase
+      .from("subscriptions")
+      .select("*", { count: "exact", head: true })
+      .eq("comedian_id", comedianData.id)
+      .eq("status", "active");
 
-  const totalTips = tipsData?.reduce((sum, t) => sum + t.amount, 0) || 0;
-  const balance = Math.round(totalTips * 0.85 + (subCount || 0) * 500 * 0.80);
+    // Videos
+    const { data: videosData } = await supabase
+      .from("videos").select("*")
+      .eq("comedian_id", comedianData.id)
+      .order("created_at", { ascending: false });
 
-  setComedian(comedianData);
-  setStats({ totalTips, totalSubscribers: subCount || 0, totalVideos: videosData?.length || 0, balance });
-  setRecentTips(tipsData?.slice(0, 10) || []);
-  setVideos(videosData || []);
-  setLoading(false);
-}
+    // Calculate earnings
+    const totalTips = tipsData?.reduce((sum, t) => sum + t.amount, 0) || 0;
+    const tipsPlatformCut = Math.round(totalTips * TIP_PLATFORM_CUT);
+    const tipsNet = Math.round(totalTips * TIP_COMEDIAN_SHARE);
+
+    const subsGross = (subCount || 0) * SUB_PRICE;
+    const subsPlatformCut = Math.round(subsGross * SUB_PLATFORM_CUT);
+    const subsNet = Math.round(subsGross * SUB_COMEDIAN_SHARE);
+
+    const balance = tipsNet + subsNet;
+
+    setComedian(comedianData);
+    setStats({
+      totalTips,
+      tipsNet,
+      tipsPlatformCut,
+      totalSubscribers: subCount || 0,
+      subsGross,
+      subsNet,
+      subsPlatformCut,
+      totalVideos: videosData?.length || 0,
+      balance,
+    });
+    setRecentTips(tipsData?.slice(0, 10) || []);
+    setVideos(videosData || []);
+    setLoading(false);
+  }
 
   if (authLoading || loading) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -59,9 +106,19 @@ export default function Dashboard() {
 
   if (!comedian) return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24 }}>
-      <i className="ti ti-user-off" style={{ fontSize: 40, color: "var(--text-3)" }} aria-hidden="true" />
-      <p style={{ color: "var(--text-2)", textAlign: "center" }}>Aucun profil comédien trouvé.<br />Contacte l'équipe rire.ci.</p>
-      <button onClick={() => router.push("/")} style={{ padding: "10px 20px", borderRadius: 8, background: "var(--accent)", color: "#fff", border: "none", fontWeight: 600 }}>Retour</button>
+      <i className="ti ti-microphone" style={{ fontSize: 40, color: "var(--text-3)" }} aria-hidden="true" />
+      <p style={{ color: "var(--text-2)", textAlign: "center", fontSize: 15, fontWeight: 600 }}>
+        Tu n'as pas encore de profil comédien
+      </p>
+      <p style={{ color: "var(--text-3)", fontSize: 13, textAlign: "center" }}>
+        Crée ton profil pour accéder à ton dashboard.
+      </p>
+      <button
+        onClick={() => router.push("/devenir-comedien")}
+        style={{ padding: "12px 24px", borderRadius: 10, background: "var(--accent)", color: "#fff", border: "none", fontSize: 14, fontWeight: 600 }}
+      >
+        Créer mon profil comédien
+      </button>
     </div>
   );
 
@@ -107,29 +164,29 @@ export default function Dashboard() {
           </div>
           <div>
             <p style={{ fontSize: 16, fontWeight: 700 }}>Bonjour, {comedian.name.split(" ")[0]} 👋</p>
-            <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>Tableau de bord</p>
+            <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>Tableau de bord comédien</p>
           </div>
         </div>
 
         {/* Balance card */}
         <div style={{ borderRadius: 14, background: "var(--bg-2)", border: "0.5px solid var(--border)", padding: "20px", marginBottom: 16 }}>
           <p style={{ fontSize: 12, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-            Solde disponible
+            Solde net disponible
           </p>
           <p style={{ fontSize: 34, fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
             {stats.balance.toLocaleString("fr-FR")}
             <span style={{ fontSize: 16, color: "var(--text-3)", marginLeft: 6, fontWeight: 400 }}>F CFA</span>
           </p>
           <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 8 }}>
-            Après commission rire.ci (15% tips · 20% abonnements)
+            Tips (tu gardes 93%) + Abonnements (tu gardes 85%) · Versement bi-mensuel
           </p>
         </div>
 
         {/* Stat cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 20 }}>
           {[
-            { label: "Tips reçus", value: stats.totalTips.toLocaleString("fr-FR") + " F", icon: "ti-coin", color: "#FF4500" },
-            { label: "Abonnés", value: stats.totalSubscribers, icon: "ti-star", color: "#F39C12" },
+            { label: "Tips bruts", value: stats.totalTips.toLocaleString("fr-FR") + " F", icon: "ti-coin", color: "#FF4500" },
+            { label: "Abonnés actifs", value: stats.totalSubscribers, icon: "ti-star", color: "#F39C12" },
             { label: "Vidéos", value: stats.totalVideos, icon: "ti-video", color: "#3498DB" },
           ].map((stat) => (
             <div key={stat.label} style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", padding: "14px 10px", textAlign: "center" }}>
@@ -164,28 +221,121 @@ export default function Dashboard() {
 
       <div style={{ padding: "16px 16px 24px" }}>
 
-        {/* Overview tab */}
+        {/* ── Overview tab ─────────────────────────────────────────── */}
         {activeTab === "overview" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {/* Earnings breakdown */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+            {/* Tips breakdown */}
             <div style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", overflow: "hidden" }}>
+              <div style={{ padding: "12px 16px", background: "var(--bg-3)", borderBottom: "0.5px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+                <i className="ti ti-coin" style={{ fontSize: 15, color: "#FF4500" }} aria-hidden="true" />
+                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Tips</p>
+              </div>
               {[
-                { label: "Tips bruts", sub: "avant commission", value: stats.totalTips.toLocaleString("fr-FR") + " F" },
-                { label: "Commission (15%)", sub: "", value: "− " + Math.round(stats.totalTips * 0.15).toLocaleString("fr-FR") + " F" },
-                { label: "Abonnements nets", sub: `${stats.totalSubscribers} × 400 F`, value: Math.round(stats.totalSubscribers * 400).toLocaleString("fr-FR") + " F" },
+                {
+                  label: "Tips bruts reçus",
+                  sub: "total envoyé par tes fans",
+                  value: stats.totalTips.toLocaleString("fr-FR") + " F",
+                  color: "var(--text-1)",
+                },
+                {
+                  label: "Commission rire.ci",
+                  sub: `7% × ${stats.totalTips.toLocaleString("fr-FR")} F`,
+                  value: "− " + stats.tipsPlatformCut.toLocaleString("fr-FR") + " F",
+                  color: "var(--text-3)",
+                },
+                {
+                  label: "Tes revenus tips nets",
+                  sub: "93% tu gardes",
+                  value: stats.tipsNet.toLocaleString("fr-FR") + " F",
+                  color: "var(--accent)",
+                  bold: true,
+                },
               ].map((row, i) => (
-                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "0.5px solid var(--border)" }}>
+                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px", borderBottom: i < 2 ? "0.5px solid var(--border)" : "none" }}>
                   <div>
-                    <p style={{ fontSize: 13, color: "var(--text-1)" }}>{row.label}</p>
-                    {row.sub && <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{row.sub}</p>}
+                    <p style={{ fontSize: 13, color: row.bold ? "var(--text-1)" : "var(--text-2)" }}>{row.label}</p>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{row.sub}</p>
                   </div>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>{row.value}</p>
+                  <p style={{ fontSize: 13, fontWeight: row.bold ? 700 : 500, color: row.color }}>
+                    {row.value}
+                  </p>
                 </div>
               ))}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px" }}>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Total net</p>
-                <p style={{ fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>{stats.balance.toLocaleString("fr-FR")} F</p>
+            </div>
+
+            {/* Subscriptions breakdown */}
+            <div style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", overflow: "hidden" }}>
+              <div style={{ padding: "12px 16px", background: "var(--bg-3)", borderBottom: "0.5px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+                <i className="ti ti-star" style={{ fontSize: 15, color: "#F39C12" }} aria-hidden="true" />
+                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Fan Pass (abonnements)</p>
               </div>
+              {[
+                {
+                  label: "Abonnements bruts",
+                  sub: `${stats.totalSubscribers} abonnés × ${SUB_PRICE} F`,
+                  value: stats.subsGross.toLocaleString("fr-FR") + " F",
+                  color: "var(--text-1)",
+                },
+                {
+                  label: "Commission rire.ci",
+                  sub: `15% × ${stats.subsGross.toLocaleString("fr-FR")} F`,
+                  value: "− " + stats.subsPlatformCut.toLocaleString("fr-FR") + " F",
+                  color: "var(--text-3)",
+                },
+                {
+                  label: "Tes revenus abonnements nets",
+                  sub: "85% tu gardes",
+                  value: stats.subsNet.toLocaleString("fr-FR") + " F",
+                  color: "var(--accent)",
+                  bold: true,
+                },
+              ].map((row, i) => (
+                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px", borderBottom: i < 2 ? "0.5px solid var(--border)" : "none" }}>
+                  <div>
+                    <p style={{ fontSize: 13, color: row.bold ? "var(--text-1)" : "var(--text-2)" }}>{row.label}</p>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{row.sub}</p>
+                  </div>
+                  <p style={{ fontSize: 13, fontWeight: row.bold ? 700 : 500, color: row.color }}>
+                    {row.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Total net */}
+            <div style={{ borderRadius: 12, background: "rgba(255,69,0,0.06)", border: "0.5px solid rgba(255,69,0,0.25)", padding: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>Total net à percevoir</p>
+                  <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 3 }}>
+                    Tips nets ({stats.tipsNet.toLocaleString("fr-FR")} F) + Abonnements nets ({stats.subsNet.toLocaleString("fr-FR")} F)
+                  </p>
+                </div>
+                <p style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", flexShrink: 0, marginLeft: 12 }}>
+                  {stats.balance.toLocaleString("fr-FR")} F
+                </p>
+              </div>
+            </div>
+
+            {/* Payout terms */}
+            <div style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", overflow: "hidden" }}>
+              <div style={{ padding: "12px 16px", background: "var(--bg-3)", borderBottom: "0.5px solid var(--border)" }}>
+                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Conditions de paiement</p>
+              </div>
+              {[
+                { label: "Commission tips", value: "7%", highlight: false },
+                { label: "Tu gardes (tips)", value: "93%", highlight: true },
+                { label: "Commission abonnements", value: "15%", highlight: false },
+                { label: "Tu gardes (abonnements)", value: "85%", highlight: true },
+                { label: "Fréquence de versement", value: "Bi-mensuel (tous les 15 jours)", highlight: false },
+                { label: "Méthode de paiement", value: "Orange Money · MTN MoMo", highlight: false },
+              ].map((row, i) => (
+                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 16px", borderBottom: i < 5 ? "0.5px solid var(--border)" : "none" }}>
+                  <span style={{ fontSize: 13, color: "var(--text-2)" }}>{row.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: row.highlight ? "var(--accent)" : "var(--text-1)" }}>{row.value}</span>
+                </div>
+              ))}
             </div>
 
             {/* Quick actions */}
@@ -197,12 +347,7 @@ export default function Dashboard() {
                 <button
                   key={item.label}
                   onClick={item.action}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "16px", background: "none", border: "none",
-                    borderBottom: i === 0 ? "0.5px solid var(--border)" : "none",
-                    color: "var(--text-1)", textAlign: "left",
-                  }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px", background: "none", border: "none", borderBottom: i === 0 ? "0.5px solid var(--border)" : "none", color: "var(--text-1)", textAlign: "left" }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--accent-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -217,7 +362,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Tips tab */}
+        {/* ── Tips tab ──────────────────────────────────────────────── */}
         {activeTab === "tips" && (
           recentTips.length === 0 ? (
             <div style={{ textAlign: "center", padding: "48px 0", color: "var(--text-3)" }}>
@@ -227,30 +372,43 @@ export default function Dashboard() {
             </div>
           ) : (
             <div style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", overflow: "hidden" }}>
+              {/* Header */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "10px 16px", borderBottom: "0.5px solid var(--border)", background: "var(--bg-3)" }}>
+                <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase" }}>Date</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase", textAlign: "center" }}>Montant brut</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 600, textTransform: "uppercase", textAlign: "right" }}>Net (93%)</span>
+              </div>
               {recentTips.map((tip, i) => (
-                <div key={tip.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: i < recentTips.length - 1 ? "0.5px solid var(--border)" : "none" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--accent-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <i className="ti ti-coin" style={{ fontSize: 17, color: "var(--accent)" }} aria-hidden="true" />
-                    </div>
-                    <div>
-                      <p style={{ fontSize: 13, fontWeight: 500 }}>Fan anonyme</p>
-                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
-                        {new Date(tip.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
-                      </p>
-                    </div>
+                <div key={tip.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center", padding: "13px 16px", borderBottom: i < recentTips.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                  <div>
+                    <p style={{ fontSize: 12, color: "var(--text-1)" }}>
+                      {new Date(tip.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                    </p>
+                    <p style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>Fan anonyme</p>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>+{tip.amount.toLocaleString("fr-FR")} F</p>
-                    <p style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>net: {Math.round(tip.amount * 0.85).toLocaleString("fr-FR")} F</p>
-                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-1)", textAlign: "center" }}>
+                    {tip.amount.toLocaleString("fr-FR")} F
+                  </p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textAlign: "right" }}>
+                    +{Math.round(tip.amount * TIP_COMEDIAN_SHARE).toLocaleString("fr-FR")} F
+                  </p>
                 </div>
               ))}
+              {/* Total row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center", padding: "13px 16px", background: "var(--bg-3)", borderTop: "0.5px solid var(--border)" }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Total</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", textAlign: "center" }}>
+                  {stats.totalTips.toLocaleString("fr-FR")} F
+                </p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", textAlign: "right" }}>
+                  +{stats.tipsNet.toLocaleString("fr-FR")} F
+                </p>
+              </div>
             </div>
           )
         )}
 
-        {/* Videos tab */}
+        {/* ── Videos tab ───────────────────────────────────────────── */}
         {activeTab === "videos" && (
           <div>
             <button

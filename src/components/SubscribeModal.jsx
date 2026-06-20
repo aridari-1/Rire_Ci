@@ -29,8 +29,9 @@ export default function SubscribeModal({ comedian, onClose, onSuccess }) {
     });
     const { authorizationUrl, error } = await res.json();
     if (error) throw new Error(error);
-    // Redirect full page to Paystack
-    window.location.href = authorizationUrl;
+    // Save return path and payment type
+    sessionStorage.setItem("payment_return_path", window.location.pathname);
+    window.location.href = authorizationUrl + "&type=subscription";
   } catch (err) {
     setErrorMsg(err.message);
     setStep("error");
