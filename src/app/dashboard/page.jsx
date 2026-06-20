@@ -24,30 +24,32 @@ export default function Dashboard() {
   }, [user]);
 
   async function fetchDashboard() {
-    setLoading(true);
-    const { data: comedianData } = await supabase.from("comedians").select("*").limit(1).single();
-    if (!comedianData) { setLoading(false); return; }
+  setLoading(true);
+  const { data: comedianData } = await supabase
+    .from("comedians").select("*").eq("user_id", user.id).single();
 
-    const { data: tipsData } = await supabase.from("tips").select("*")
-      .eq("comedian_id", comedianData.id).eq("status", "completed")
-      .order("created_at", { ascending: false });
+  if (!comedianData) { setLoading(false); return; }
 
-    const { count: subCount } = await supabase.from("subscriptions")
-      .select("*", { count: "exact", head: true })
-      .eq("comedian_id", comedianData.id).eq("status", "active");
+  const { data: tipsData } = await supabase.from("tips").select("*")
+    .eq("comedian_id", comedianData.id).eq("status", "completed")
+    .order("created_at", { ascending: false });
 
-    const { data: videosData } = await supabase.from("videos").select("*")
-      .eq("comedian_id", comedianData.id).order("created_at", { ascending: false });
+  const { count: subCount } = await supabase.from("subscriptions")
+    .select("*", { count: "exact", head: true })
+    .eq("comedian_id", comedianData.id).eq("status", "active");
 
-    const totalTips = tipsData?.reduce((sum, t) => sum + t.amount, 0) || 0;
-    const balance = Math.round(totalTips * 0.85 + (subCount || 0) * 500 * 0.80);
+  const { data: videosData } = await supabase.from("videos").select("*")
+    .eq("comedian_id", comedianData.id).order("created_at", { ascending: false });
 
-    setComedian(comedianData);
-    setStats({ totalTips, totalSubscribers: subCount || 0, totalVideos: videosData?.length || 0, balance });
-    setRecentTips(tipsData?.slice(0, 10) || []);
-    setVideos(videosData || []);
-    setLoading(false);
-  }
+  const totalTips = tipsData?.reduce((sum, t) => sum + t.amount, 0) || 0;
+  const balance = Math.round(totalTips * 0.85 + (subCount || 0) * 500 * 0.80);
+
+  setComedian(comedianData);
+  setStats({ totalTips, totalSubscribers: subCount || 0, totalVideos: videosData?.length || 0, balance });
+  setRecentTips(tipsData?.slice(0, 10) || []);
+  setVideos(videosData || []);
+  setLoading(false);
+}
 
   if (authLoading || loading) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>

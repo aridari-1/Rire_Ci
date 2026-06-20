@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 const NAV_ITEMS = [
   { id: "home", label: "Accueil", icon: "ti-home", path: "/" },
   { id: "search", label: "Recherche", icon: "ti-search", path: "/recherche" },
-  { id: "profile", label: "Profil", icon: "ti-user", path: "/auth" },
+  { id: "comedien", label: "Comédien", icon: "ti-microphone", path: "/devenir-comedien" },
   { id: "dashboard", label: "Dashboard", icon: "ti-layout-dashboard", path: "/dashboard" },
 ];
 
