@@ -10,12 +10,15 @@ function PaymentConfirmContent() {
   const [type, setType] = useState("");
 
   useEffect(() => {
-    const reference = searchParams.get("reference") || searchParams.get("trxref");
-    const paymentType = searchParams.get("type");
-    if (paymentType) setType(paymentType);
-    if (!reference) { setStatus("error"); return; }
-    verifyPayment(reference, paymentType);
-  }, []);
+  const reference = searchParams.get("reference") || searchParams.get("trxref");
+
+  // Read payment type from sessionStorage (set before redirect)
+  const paymentType = sessionStorage.getItem("payment_type") || "tip";
+  setType(paymentType);
+
+  if (!reference) { setStatus("error"); return; }
+  verifyPayment(reference, paymentType);
+}, []);
 
   async function verifyPayment(reference, paymentType) {
     try {
@@ -48,11 +51,13 @@ function PaymentConfirmContent() {
   }
 
   // Read return path from sessionStorage
-  function handleBack() {
-    const returnPath = sessionStorage.getItem("payment_return_path") || "/";
-    sessionStorage.removeItem("payment_return_path");
-    router.push(returnPath);
-  }
+ function handleBack() {
+  const returnPath = sessionStorage.getItem("payment_return_path") || "/";
+  // Clear sessionStorage after use
+  sessionStorage.removeItem("payment_type");
+  sessionStorage.removeItem("payment_return_path");
+  router.push(returnPath);
+}
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>

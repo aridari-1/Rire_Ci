@@ -14,7 +14,7 @@ export default function SubscribeModal({ comedian, onClose, onSuccess }) {
   const [step, setStep] = useState("choose");
   const [errorMsg, setErrorMsg] = useState("");
 
- async function handleSubscribe() {
+async function handleSubscribe() {
   if (!email) return;
   setStep("loading");
   try {
@@ -29,9 +29,13 @@ export default function SubscribeModal({ comedian, onClose, onSuccess }) {
     });
     const { authorizationUrl, error } = await res.json();
     if (error) throw new Error(error);
-    // Save return path and payment type
+
+    // Store type and return path in sessionStorage — NOT in the URL
+    sessionStorage.setItem("payment_type", "subscription");
     sessionStorage.setItem("payment_return_path", window.location.pathname);
-    window.location.href = authorizationUrl + "&type=subscription";
+
+    // Redirect to clean Paystack URL with no extra params
+    window.location.href = authorizationUrl;
   } catch (err) {
     setErrorMsg(err.message);
     setStep("error");

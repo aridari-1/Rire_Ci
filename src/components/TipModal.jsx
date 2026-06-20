@@ -29,9 +29,13 @@ export default function TipModal({ comedian, onClose }) {
     });
     const { authorizationUrl, error } = await res.json();
     if (error) throw new Error(error);
-    // Save return path and payment type
+
+    // Store type and return path in sessionStorage — NOT in the URL
+    sessionStorage.setItem("payment_type", "tip");
     sessionStorage.setItem("payment_return_path", window.location.pathname);
-    window.location.href = authorizationUrl + "&type=tip";
+
+    // Redirect to clean Paystack URL with no extra params
+    window.location.href = authorizationUrl;
   } catch (err) {
     setErrorMsg(err.message);
     setStep("error");
