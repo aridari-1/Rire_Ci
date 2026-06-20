@@ -14,31 +14,29 @@ export default function TipModal({ comedian, onClose }) {
   const finalAmount = custom ? parseInt(custom) : selected;
 
   async function handlePay() {
-    if (!email || !finalAmount) return;
-    setStep("loading");
-    try {
-      const res = await fetch("/api/tip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, amount: finalAmount, comedianId: comedian.id, comedianName: comedian.name }),
-      });
-      const { authorizationUrl, reference, error } = await res.json();
-      if (error) throw new Error(error);
-
-      const popup = window.open(authorizationUrl, "_blank", "width=500,height=700");
-      const timer = setInterval(async () => {
-        if (popup?.closed) {
-          clearInterval(timer);
-          const verifyRes = await fetch(`/api/tip/verify?reference=${reference}`);
-          const { success } = await verifyRes.json();
-          setStep(success ? "success" : "error");
-        }
-      }, 1000);
-    } catch (err) {
-      setErrorMsg(err.message);
-      setStep("error");
-    }
+  if (!email || !finalAmount) return;
+  setStep("loading");
+  try {
+    const res = await fetch("/api/tip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        amount: finalAmount,
+        comedianId: comedian.id,
+        comedianName: comedian.name,
+      }),
+    });
+    const { authorizationUrl, error } = await res.json();
+    if (error) throw new Error(error);
+    // Redirect full page to Paystack
+    window.location.href = authorizationUrl;
+  } catch (err) {
+    setErrorMsg(err.message);
+    setStep("error");
   }
+}
+
 
   return (
     <div

@@ -13,7 +13,8 @@ export async function POST(request) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
-  // Initialize Paystack transaction
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
   const res = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
     headers: {
@@ -22,10 +23,9 @@ export async function POST(request) {
     },
     body: JSON.stringify({
       email,
-      // Paystack uses kobo/cents — multiply by 100
-      // For XOF (FCFA) Paystack accepts the amount directly in the lowest unit
       amount: amount * 100,
-      currency: "XOF", // change to XOF once your Paystack account is approved for Côte d'Ivoire
+      currency: "GHS",
+      callback_url: `${baseUrl}/paiement-confirme`,
       metadata: {
         comedian_id: comedianId,
         comedian_name: comedianName,
@@ -35,12 +35,10 @@ export async function POST(request) {
   });
 
   const data = await res.json();
-
   if (!data.status) {
     return NextResponse.json({ error: data.message }, { status: 400 });
   }
 
-  // Save a pending tip to Supabase
   await supabase.from("tips").insert({
     comedian_id: comedianId,
     amount,

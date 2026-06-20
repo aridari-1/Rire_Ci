@@ -14,33 +14,29 @@ export default function SubscribeModal({ comedian, onClose, onSuccess }) {
   const [step, setStep] = useState("choose");
   const [errorMsg, setErrorMsg] = useState("");
 
-  async function handleSubscribe() {
-    if (!email) return;
-    setStep("loading");
-    try {
-      const res = await fetch("/api/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, comedianId: comedian.id, comedianName: comedian.name }),
-      });
-      const { authorizationUrl, reference, error } = await res.json();
-      if (error) throw new Error(error);
-
-      const popup = window.open(authorizationUrl, "_blank", "width=500,height=700");
-      const timer = setInterval(async () => {
-        if (popup?.closed) {
-          clearInterval(timer);
-          const verifyRes = await fetch(`/api/subscribe/verify?reference=${reference}`);
-          const { success } = await verifyRes.json();
-          if (success) setStep("success");
-          else { setErrorMsg("Le paiement n'a pas abouti."); setStep("error"); }
-        }
-      }, 1000);
-    } catch (err) {
-      setErrorMsg(err.message);
-      setStep("error");
-    }
+ async function handleSubscribe() {
+  if (!email) return;
+  setStep("loading");
+  try {
+    const res = await fetch("/api/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        comedianId: comedian.id,
+        comedianName: comedian.name,
+      }),
+    });
+    const { authorizationUrl, error } = await res.json();
+    if (error) throw new Error(error);
+    // Redirect full page to Paystack
+    window.location.href = authorizationUrl;
+  } catch (err) {
+    setErrorMsg(err.message);
+    setStep("error");
   }
+}
+
 
   const initials = comedian.name.split(" ").map((n) => n[0]).join("").toUpperCase();
 

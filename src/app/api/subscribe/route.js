@@ -13,7 +13,8 @@ export async function POST(request) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
-  // Initialize Paystack transaction (recurring plan)
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
   const res = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
     headers: {
@@ -22,8 +23,9 @@ export async function POST(request) {
     },
     body: JSON.stringify({
       email,
-      amount: 500 * 100, // 500 FCFA in kobo
-      currency: "XOF",
+      amount: 500 * 100,
+      currency: "GHS",
+      callback_url: `${baseUrl}/paiement-confirme`,
       metadata: {
         comedian_id: comedianId,
         comedian_name: comedianName,
@@ -33,12 +35,10 @@ export async function POST(request) {
   });
 
   const data = await res.json();
-
   if (!data.status) {
     return NextResponse.json({ error: data.message }, { status: 400 });
   }
 
-  // Save pending subscription to Supabase
   await supabase.from("subscriptions").insert({
     comedian_id: comedianId,
     email,
