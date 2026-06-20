@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
-import { useRouter } from "next/navigation";
-import VideoCard from "@/components/VideoCard";
 import TipModal from "@/components/TipModal";
 import SubscribeModal from "@/components/SubscribeModal";
+import VideoCard from "@/components/VideoCard";
 
 export default function ComedianProfile({ params }) {
   const { slug } = use(params);
+  const router = useRouter();
+  const { user, logout } = useAuth();
+
   const [comedian, setComedian] = useState(null);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,43 +20,29 @@ export default function ComedianProfile({ params }) {
   const [showTip, setShowTip] = useState(false);
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const { user, logout } = useAuth();
-  const router = useRouter();
+  const [isFollowing, setIsFollowing] = useState(false);
 
-  useEffect(() => {
-    fetchComedian();
-  }, [slug]);
+  useEffect(() => { fetchComedian(); }, [slug]);
 
   async function fetchComedian() {
     setLoading(true);
+    const { data: comedianData } = await supabase
+      .from("comedians").select("*").eq("slug", slug).single();
 
-    const { data: comedianData, error: comedianError } = await supabase
-      .from("comedians")
-      .select("*")
-      .eq("slug", slug)
-      .single();
-
-    if (comedianError || !comedianData) {
-      setLoading(false);
-      return;
-    }
+    if (!comedianData) { setLoading(false); return; }
 
     const { data: videoData } = await supabase
-      .from("videos")
-      .select("*")
+      .from("videos").select("*")
       .eq("comedian_id", comedianData.id)
       .order("created_at", { ascending: false });
 
     const { count: subCount } = await supabase
       .from("subscriptions")
       .select("*", { count: "exact", head: true })
-      .eq("comedian_id", comedianData.id)
-      .eq("status", "active");
+      .eq("comedian_id", comedianData.id).eq("status", "active");
 
     const { data: tipData } = await supabase
-      .from("tips")
-      .select("amount")
-      .eq("comedian_id", comedianData.id);
+      .from("tips").select("amount").eq("comedian_id", comedianData.id);
 
     const totalTips = tipData?.reduce((sum, t) => sum + t.amount, 0) || 0;
 
@@ -67,166 +56,135 @@ export default function ComedianProfile({ params }) {
     setLoading(false);
   }
 
-  if (loading) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: "#0E0C0A" }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 32, fontFamily: "Georgia, serif", color: "#FFD600", fontWeight: 700 }}>
-            rire<span style={{ color: "#FF6B2B" }}>.ci</span>
-          </div>
-          <p style={{ color: "#6B6560", fontSize: 13, marginTop: 12 }}>Chargement...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <p style={{ fontSize: 28, fontWeight: 700 }}>rire<span style={{ color: "var(--accent)" }}>.</span>ci</p>
+    </div>
+  );
 
-  if (!comedian) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: "#0E0C0A", color: "#F5F0EB" }}
-      >
-        <p>Comédien introuvable.</p>
-      </div>
-    );
-  }
+  if (!comedian) return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+      <i className="ti ti-mood-sad" style={{ fontSize: 40, color: "var(--text-3)" }} />
+      <p style={{ color: "var(--text-2)" }}>Comédien introuvable.</p>
+      <button onClick={() => router.push("/")} style={{ padding: "10px 20px", borderRadius: 8, background: "var(--accent)", color: "#fff", border: "none", fontWeight: 600 }}>Retour</button>
+    </div>
+  );
 
-  const initials = comedian.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+  const initials = comedian.name.split(" ").map((n) => n[0]).join("").toUpperCase();
+  const publicVideos = videos.filter((v) => !v.is_locked);
+  const exclusiveVideos = videos.filter((v) => v.is_locked);
 
   return (
-    <div className="min-h-screen" style={{ background: "#0E0C0A", color: "#F5F0EB" }}>
+    <div style={{ minHeight: "100vh" }}>
 
       {/* Nav */}
-      <nav
-        className="sticky top-0 z-40 flex items-center justify-between px-4 py-3"
-        style={{
-          background: "rgba(14,12,10,0.92)",
-          backdropFilter: "blur(12px)",
-          borderBottom: "0.5px solid #2A2420",
-        }}
-      >
-        <button style={{ color: "#FF6B2B", fontSize: 22 }} onClick={() => window.history.back()}>
-          ←
+      <nav style={{
+        position: "sticky", top: 0, zIndex: 40,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 16px",
+        background: "rgba(17,17,20,0.95)", backdropFilter: "blur(12px)",
+        borderBottom: "0.5px solid var(--border)",
+      }}>
+        <button onClick={() => router.back()} style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--bg-2)", border: "0.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)" }}>
+          <i className="ti ti-arrow-left" style={{ fontSize: 16 }} aria-hidden="true" />
         </button>
-        <span style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 700, color: "#FFD600" }}>
-          rire<span style={{ color: "#FF6B2B" }}>.ci</span>
-        </span>
-        {user ? (
-          <button
-            onClick={logout}
-            style={{ color: "#6B6560", fontSize: 12, fontWeight: 600 }}
-          >
-            Déconnexion
-          </button>
-        ) : (
-          <button
-            onClick={() => router.push("/auth")}
-            style={{ color: "#FF6B2B", fontSize: 12, fontWeight: 600 }}
-          >
-            Connexion
-          </button>
-        )}
+        <span style={{ fontSize: 16, fontWeight: 600, color: "var(--text-1)" }}>{comedian.name}</span>
+        <button style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--bg-2)", border: "0.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)" }}>
+          <i className="ti ti-dots-vertical" style={{ fontSize: 16 }} aria-hidden="true" />
+        </button>
       </nav>
 
-      {/* Cover */}
-      <div
-        style={{
-          height: 120,
-          background: `linear-gradient(135deg, ${comedian.cover_color}33 0%, ${comedian.cover_color}88 50%, #FFD60022 100%)`,
-          borderBottom: `2px solid ${comedian.cover_color}44`,
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <svg className="absolute inset-0 w-full h-full opacity-10" preserveAspectRatio="none">
-          {[...Array(8)].map((_, i) => (
-            <circle key={i} cx={`${i * 14 + 7}%`} cy="60%" r="28" fill="none" stroke="#FFD600" strokeWidth="0.5" />
-          ))}
-        </svg>
-      </div>
+      {/* Profile header */}
+      <div style={{ padding: "24px 16px 0" }}>
 
-      <div className="px-4" style={{ marginTop: -44 }}>
-        {/* Avatar + buttons */}
-        <div className="flex items-end justify-between">
-          <div
-            className="flex items-center justify-center rounded-full"
-            style={{
-              width: 84, height: 84,
-              background: comedian.cover_color,
-              border: "3px solid #0E0C0A",
-              fontFamily: "Georgia, serif",
-              fontSize: 28, fontWeight: 700, color: "#fff", flexShrink: 0,
-            }}
-          >
-            {comedian.avatar_url
-              ? <img src={comedian.avatar_url} alt={comedian.name} className="w-full h-full rounded-full object-cover" />
-              : initials}
+        {/* Avatar + actions */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ position: "relative" }}>
+            <div style={{
+              width: 80, height: 80, borderRadius: "50%",
+              background: `linear-gradient(135deg, ${comedian.cover_color || "var(--accent)"}, #FF8C00)`,
+              padding: 2,
+            }}>
+              <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "var(--bg-2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, fontWeight: 700, color: "var(--text-1)", border: "2px solid var(--bg)" }}>
+                {comedian.avatar_url
+                  ? <img src={comedian.avatar_url} alt={comedian.name} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                  : initials}
+              </div>
+            </div>
+            {comedian.is_verified && (
+              <div style={{ position: "absolute", bottom: 2, right: 2, width: 20, height: 20, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--bg)" }}>
+                <i className="ti ti-check" style={{ fontSize: 10, color: "#fff" }} aria-hidden="true" />
+              </div>
+            )}
           </div>
-          <div className="flex gap-2 pb-1">
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 8, paddingTop: 8 }}>
             <button
               onClick={() => setShowTip(true)}
-              className="px-4 py-2 rounded-full active:scale-95 transition-all"
-              style={{ background: "#FF6B2B", color: "#fff", fontSize: 13, fontWeight: 700 }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, background: "var(--accent)", color: "#fff", border: "none", fontSize: 13, fontWeight: 600 }}
             >
-              💛 Tip
+              <i className="ti ti-coin" style={{ fontSize: 15 }} aria-hidden="true" />
+              Tip
             </button>
             <button
               onClick={() => !isSubscribed && setShowSubscribe(true)}
-              className="px-4 py-2 rounded-full active:scale-95 transition-all"
               style={{
-                background: isSubscribed ? "#1A1714" : "#FFD600",
-                color: isSubscribed ? "#FFD600" : "#0E0C0A",
-                border: isSubscribed ? "1px solid #FFD600" : "none",
-                fontSize: 13, fontWeight: 700,
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "9px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                background: isSubscribed ? "var(--bg-2)" : "transparent",
+                color: isSubscribed ? "var(--accent)" : "var(--text-1)",
+                border: `0.5px solid ${isSubscribed ? "var(--accent)" : "var(--border)"}`,
               }}
             >
-              {isSubscribed ? "✓ Abonné" : "S'abonner"}
+              <i className={`ti ${isSubscribed ? "ti-star-filled" : "ti-star"}`} style={{ fontSize: 15 }} aria-hidden="true" />
+              {isSubscribed ? "Abonné" : "S'abonner"}
             </button>
           </div>
         </div>
 
-        {/* Identity */}
-        <div className="flex items-center gap-2 mt-3">
-          <h1 style={{ fontFamily: "Georgia, serif", fontSize: 22, fontWeight: 700 }}>
-            {comedian.name}
-          </h1>
-          {comedian.is_verified && (
-            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: "#FF6B2B22", color: "#FF6B2B", fontWeight: 700 }}>
-              ✓ vérifié
-            </span>
-          )}
-        </div>
-        <p style={{ color: "#FFD600", fontSize: 13, marginTop: 2, fontStyle: "italic" }}>{comedian.tagline}</p>
-        <p style={{ color: "#A09890", fontSize: 14, marginTop: 8, lineHeight: 1.6 }}>{comedian.bio}</p>
-        <p style={{ color: "#6B6560", fontSize: 12, marginTop: 6 }}>📍 {comedian.location}</p>
+        {/* Name + bio */}
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-1)", marginBottom: 2 }}>
+          {comedian.name}
+        </h1>
+        {comedian.tagline && (
+          <p style={{ fontSize: 13, color: "var(--accent)", marginBottom: 8, fontWeight: 500 }}>
+            {comedian.tagline}
+          </p>
+        )}
+        {comedian.bio && (
+          <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 10 }}>
+            {comedian.bio}
+          </p>
+        )}
+        {comedian.location && (
+          <p style={{ fontSize: 13, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 4, marginBottom: 14 }}>
+            <i className="ti ti-map-pin" style={{ fontSize: 14 }} aria-hidden="true" />
+            {comedian.location}
+          </p>
+        )}
 
         {/* Tags */}
-        <div className="flex flex-wrap gap-2 mt-3">
-          {comedian.tags?.map((tag) => (
-            <span key={tag} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 999, background: "#1A1714", color: "#A09890", border: "0.5px solid #2A2420" }}>
-              {tag}
-            </span>
-          ))}
-        </div>
+        {comedian.tags?.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+            {comedian.tags.map((tag) => (
+              <span key={tag} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 20, background: "var(--bg-2)", color: "var(--text-2)", border: "0.5px solid var(--border)" }}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Stats */}
-        <div className="flex mt-4 rounded-xl overflow-hidden" style={{ background: "#1A1714", border: "0.5px solid #2A2420" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: "var(--border)", borderRadius: 12, overflow: "hidden", marginBottom: 20 }}>
           {[
-            { label: "Abonnés", value: comedian.subscribers.toLocaleString("fr-FR") },
-            { label: "Total tips", value: `${comedian.totalTips} F` },
-            { label: "Vidéos", value: comedian.videoCount },
-          ].map((stat, i) => (
-            <div key={stat.label} className="flex-1 flex flex-col items-center py-3"
-              style={{ borderRight: i < 2 ? "0.5px solid #2A2420" : "none" }}>
-              <span style={{ fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 700 }}>{stat.value}</span>
-              <span style={{ fontSize: 11, color: "#6B6560", marginTop: 2 }}>{stat.label}</span>
+            { label: "Abonnés", value: comedian.subscribers.toLocaleString("fr-FR"), icon: "ti-star" },
+            { label: "Tips reçus", value: `${comedian.totalTips} F`, icon: "ti-coin" },
+            { label: "Vidéos", value: comedian.videoCount, icon: "ti-video" },
+          ].map((stat) => (
+            <div key={stat.label} style={{ background: "var(--bg-2)", padding: "14px 8px", textAlign: "center" }}>
+              <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-1)" }}>{stat.value}</p>
+              <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>{stat.label}</p>
             </div>
           ))}
         </div>
@@ -235,61 +193,82 @@ export default function ComedianProfile({ params }) {
         {!isSubscribed && (
           <div
             onClick={() => setShowSubscribe(true)}
-            className="mt-4 rounded-xl p-4 flex items-center justify-between cursor-pointer active:opacity-80"
-            style={{ background: "linear-gradient(90deg,#FFD60014,#FF6B2B14)", border: "0.5px solid #FF6B2B44" }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", marginBottom: 20, cursor: "pointer" }}
           >
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#FFD600" }}>Fan Pass mensuel</p>
-              <p style={{ fontSize: 12, color: "#A09890", marginTop: 2 }}>
-                Accès aux vidéos exclusives · Badge fan · Accès anticipé
-              </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--accent-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <i className="ti ti-crown" style={{ fontSize: 18, color: "var(--accent)" }} aria-hidden="true" />
+              </div>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>Fan Pass mensuel</p>
+                <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Vidéos exclusives · Badge · Accès anticipé</p>
+              </div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <p style={{ fontSize: 16, fontWeight: 700, color: "#FF6B2B" }}>500 F</p>
-              <p style={{ fontSize: 11, color: "#6B6560" }}>/mois</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--accent)" }}>500 F</p>
+              <p style={{ fontSize: 10, color: "var(--text-3)" }}>/mois</p>
             </div>
           </div>
         )}
-
-        {/* Tabs */}
-        <div className="flex mt-6 rounded-xl overflow-hidden" style={{ background: "#1A1714", padding: 3, gap: 3 }}>
-          {[{ id: "videos", label: "Vidéos" }, { id: "exclusif", label: "Exclusif 🔒" }].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="flex-1 py-2 rounded-lg transition-all"
-              style={{
-                background: activeTab === tab.id ? "#FF6B2B" : "transparent",
-                color: activeTab === tab.id ? "#fff" : "#6B6560",
-                fontSize: 13, fontWeight: 700,
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Videos */}
-        <div className="mt-4 pb-24 grid grid-cols-2 gap-3">
-          {videos
-            .filter((v) => activeTab === "exclusif" ? v.is_locked : !v.is_locked)
-            .map((video) => (
-              <VideoCard
-                key={video.id}
-                video={video}
-                coverColor={comedian.cover_color}
-                isSubscribed={isSubscribed}
-                onSubscribe={() => setShowSubscribe(true)}
-              />
-            ))}
-          {videos.filter((v) => activeTab === "exclusif" ? v.is_locked : !v.is_locked).length === 0 && (
-            <div className="col-span-2 text-center py-12" style={{ color: "#6B6560", fontSize: 14 }}>
-              {activeTab === "exclusif" ? "Aucune vidéo exclusive pour l'instant." : "Aucune vidéo pour l'instant."}
-            </div>
-          )}
-        </div>
       </div>
 
+      {/* Divider */}
+      <div style={{ height: 6, background: "#0D0D10" }} />
+
+      {/* Tabs */}
+      <div style={{ display: "flex", borderBottom: "0.5px solid var(--border)", position: "sticky", top: 62, background: "var(--bg)", zIndex: 30 }}>
+        {[
+          { id: "videos", label: "Vidéos", count: publicVideos.length },
+          { id: "exclusif", label: "Exclusif", count: exclusiveVideos.length, icon: "ti-lock" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              flex: 1, padding: "14px 0",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              background: "none", border: "none",
+              color: activeTab === tab.id ? "var(--text-1)" : "var(--text-3)",
+              fontSize: 14, fontWeight: activeTab === tab.id ? 600 : 400,
+              borderBottom: activeTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
+              transition: "all 0.15s",
+            }}
+          >
+            {tab.icon && <i className={`ti ${tab.icon}`} style={{ fontSize: 14 }} aria-hidden="true" />}
+            {tab.label}
+            <span style={{ fontSize: 11, color: activeTab === tab.id ? "var(--accent)" : "var(--text-3)", background: "var(--bg-2)", padding: "1px 6px", borderRadius: 10 }}>
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Video grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: "var(--border)", marginTop: 1 }}>
+        {(activeTab === "videos" ? publicVideos : exclusiveVideos).map((video) => (
+          <VideoCard
+            key={video.id}
+            video={video}
+            coverColor={comedian.cover_color}
+            isSubscribed={isSubscribed}
+            onSubscribe={() => setShowSubscribe(true)}
+          />
+        ))}
+      </div>
+
+      {/* Empty state */}
+      {(activeTab === "videos" ? publicVideos : exclusiveVideos).length === 0 && (
+        <div style={{ textAlign: "center", padding: "48px 16px", color: "var(--text-3)" }}>
+          <i className={`ti ${activeTab === "exclusif" ? "ti-lock" : "ti-video-off"}`} style={{ fontSize: 36 }} aria-hidden="true" />
+          <p style={{ marginTop: 10, fontSize: 14 }}>
+            {activeTab === "exclusif" ? "Aucune vidéo exclusive pour l'instant." : "Aucune vidéo pour l'instant."}
+          </p>
+        </div>
+      )}
+
+      <div style={{ height: 24 }} />
+
+      {/* Modals */}
       {showTip && <TipModal comedian={comedian} onClose={() => setShowTip(false)} />}
       {showSubscribe && (
         <SubscribeModal

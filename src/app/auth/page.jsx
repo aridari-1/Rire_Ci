@@ -7,12 +7,11 @@ import { useRouter } from "next/navigation";
 export default function AuthPage() {
   const { login, signUp } = useAuth();
   const router = useRouter();
-
-  const [mode, setMode] = useState("login"); // login | signup
+  const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | loading | error | verify
+  const [status, setStatus] = useState("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
   async function handleSubmit() {
@@ -20,7 +19,6 @@ export default function AuthPage() {
     if (mode === "signup" && !name) return;
     setStatus("loading");
     setErrorMsg("");
-
     try {
       if (mode === "signup") {
         await signUp(email, password, name);
@@ -35,152 +33,122 @@ export default function AuthPage() {
     }
   }
 
+  if (status === "verify") return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ width: "100%", maxWidth: 360, textAlign: "center" }}>
+        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--accent-muted)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+          <i className="ti ti-mail" style={{ fontSize: 28, color: "var(--accent)" }} aria-hidden="true" />
+        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 10 }}>Vérifie ton email</h1>
+        <p style={{ color: "var(--text-2)", fontSize: 14, lineHeight: 1.6, marginBottom: 28 }}>
+          On a envoyé un lien à <span style={{ color: "var(--accent)" }}>{email}</span>. Clique dessus pour activer ton compte.
+        </p>
+        <button
+          onClick={() => { setStatus("idle"); setMode("login"); }}
+          style={{ width: "100%", padding: "14px", borderRadius: 10, background: "var(--accent)", color: "#fff", border: "none", fontSize: 15, fontWeight: 600 }}
+        >
+          Aller à la connexion
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: "#0E0C0A", color: "#F5F0EB" }}
-    >
-      <div className="w-full" style={{ maxWidth: 400 }}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ width: "100%", maxWidth: 360 }}>
 
         {/* Logo */}
-        <div className="text-center mb-8">
-          <h1 style={{ fontFamily: "Georgia, serif", fontSize: 32, fontWeight: 700, color: "#FFD600" }}>
-            rire<span style={{ color: "#FF6B2B" }}>.ci</span>
-          </h1>
-          <p style={{ color: "#6B6560", fontSize: 13, marginTop: 4 }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <p style={{ fontSize: 32, fontWeight: 700, letterSpacing: "-0.02em" }}>
+            rire<span style={{ color: "var(--accent)" }}>.</span>ci
+          </p>
+          <p style={{ color: "var(--text-3)", fontSize: 13, marginTop: 6 }}>
             La comédie ivoirienne, en direct
           </p>
         </div>
 
-        {status === "verify" ? (
-          <div
-            className="rounded-2xl p-6 text-center"
-            style={{ background: "#1A1714", border: "0.5px solid #2A2420" }}
-          >
-            <div style={{ fontSize: 48 }}>📬</div>
-            <h2 style={{ fontFamily: "Georgia, serif", fontSize: 20, fontWeight: 700, marginTop: 12 }}>
-              Vérifie ton email
-            </h2>
-            <p style={{ color: "#A09890", fontSize: 14, marginTop: 8, lineHeight: 1.6 }}>
-              On a envoyé un lien de confirmation à{" "}
-              <span style={{ color: "#FFD600" }}>{email}</span>.
-              Clique dessus pour activer ton compte.
-            </p>
+        {/* Mode toggle */}
+        <div style={{ display: "flex", background: "var(--bg-2)", borderRadius: 10, padding: 3, gap: 3, marginBottom: 24 }}>
+          {["login", "signup"].map((m) => (
             <button
-              onClick={() => { setStatus("idle"); setMode("login"); }}
-              className="mt-6 w-full py-3 rounded-xl"
-              style={{ background: "#FF6B2B", color: "#fff", fontSize: 14, fontWeight: 700 }}
+              key={m}
+              onClick={() => { setMode(m); setStatus("idle"); setErrorMsg(""); }}
+              style={{
+                flex: 1, padding: "10px", borderRadius: 8, border: "none",
+                background: mode === m ? "var(--accent)" : "transparent",
+                color: mode === m ? "#fff" : "var(--text-3)",
+                fontSize: 14, fontWeight: 600, transition: "all 0.15s",
+              }}
             >
-              Aller à la connexion
+              {m === "login" ? "Connexion" : "Inscription"}
             </button>
+          ))}
+        </div>
+
+        {/* Fields */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {mode === "signup" && (
+            <div>
+              <label style={{ fontSize: 12, color: "var(--text-3)", display: "block", marginBottom: 6 }}>Prénom</label>
+              <input
+                type="text"
+                placeholder="Ex: Kouassi"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          )}
+          <div>
+            <label style={{ fontSize: 12, color: "var(--text-3)", display: "block", marginBottom: 6 }}>Email</label>
+            <input
+              type="email"
+              placeholder="ton@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
-        ) : (
-          <div
-            className="rounded-2xl p-6"
-            style={{ background: "#1A1714", border: "0.5px solid #2A2420" }}
+          <div>
+            <label style={{ fontSize: 12, color: "var(--text-3)", display: "block", marginBottom: 6 }}>Mot de passe</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            />
+          </div>
+
+          {status === "error" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 8, background: "rgba(255,69,0,0.1)", border: "0.5px solid rgba(255,69,0,0.3)" }}>
+              <i className="ti ti-alert-circle" style={{ fontSize: 15, color: "var(--accent)", flexShrink: 0 }} aria-hidden="true" />
+              <span style={{ fontSize: 13, color: "var(--accent)" }}>{errorMsg}</span>
+            </div>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={status === "loading"}
+            style={{
+              width: "100%", padding: "14px", borderRadius: 10, border: "none",
+              background: "var(--accent)", color: "#fff",
+              fontSize: 15, fontWeight: 600, marginTop: 4,
+              opacity: status === "loading" ? 0.7 : 1,
+              transition: "opacity 0.15s",
+            }}
           >
-            {/* Mode toggle */}
-            <div
-              className="flex rounded-xl overflow-hidden mb-6"
-              style={{ background: "#0E0C0A", padding: 3, gap: 3 }}
-            >
-              {["login", "signup"].map((m) => (
-                <button
-                  key={m}
-                  onClick={() => { setMode(m); setStatus("idle"); setErrorMsg(""); }}
-                  className="flex-1 py-2 rounded-lg transition-all"
-                  style={{
-                    background: mode === m ? "#FF6B2B" : "transparent",
-                    color: mode === m ? "#fff" : "#6B6560",
-                    fontSize: 13, fontWeight: 700,
-                  }}
-                >
-                  {m === "login" ? "Connexion" : "Inscription"}
-                </button>
-              ))}
-            </div>
+            {status === "loading" ? "Chargement..." : mode === "login" ? "Se connecter" : "Créer mon compte"}
+          </button>
+        </div>
 
-            <div className="flex flex-col gap-3">
-              {/* Name (signup only) */}
-              {mode === "signup" && (
-                <div>
-                  <label style={{ fontSize: 12, color: "#6B6560", display: "block", marginBottom: 6 }}>
-                    Ton prénom
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Kouassi"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    style={{
-                      width: "100%", padding: "12px 14px", borderRadius: 12,
-                      background: "#0E0C0A", border: "0.5px solid #2A2420",
-                      color: "#F5F0EB", fontSize: 14, outline: "none",
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Email */}
-              <div>
-                <label style={{ fontSize: 12, color: "#6B6560", display: "block", marginBottom: 6 }}>
-                  Email
-                </label>
-                <input
-                  type="email"
-                  placeholder="ton@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{
-                    width: "100%", padding: "12px 14px", borderRadius: 12,
-                    background: "#0E0C0A", border: `0.5px solid ${email ? "#FF6B2B" : "#2A2420"}`,
-                    color: "#F5F0EB", fontSize: 14, outline: "none",
-                  }}
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <label style={{ fontSize: 12, color: "#6B6560", display: "block", marginBottom: 6 }}>
-                  Mot de passe
-                </label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  style={{
-                    width: "100%", padding: "12px 14px", borderRadius: 12,
-                    background: "#0E0C0A", border: `0.5px solid ${password ? "#FF6B2B" : "#2A2420"}`,
-                    color: "#F5F0EB", fontSize: 14, outline: "none",
-                  }}
-                />
-              </div>
-
-              {/* Error */}
-              {status === "error" && (
-                <p style={{ color: "#FF4444", fontSize: 13 }}>❌ {errorMsg}</p>
-              )}
-
-              {/* Submit */}
-              <button
-                onClick={handleSubmit}
-                disabled={status === "loading"}
-                className="w-full py-4 rounded-xl transition-all active:scale-95 mt-2"
-                style={{
-                  background: "#FF6B2B",
-                  color: "#fff",
-                  fontSize: 15, fontWeight: 700,
-                  opacity: status === "loading" ? 0.7 : 1,
-                }}
-              >
-                {status === "loading"
-                  ? "Chargement..."
-                  : mode === "login" ? "Se connecter" : "Créer mon compte"}
-              </button>
-            </div>
-          </div>
-        )}
+        <p style={{ textAlign: "center", fontSize: 13, color: "var(--text-3)", marginTop: 20 }}>
+          {mode === "login" ? "Pas encore de compte ? " : "Déjà un compte ? "}
+          <span
+            onClick={() => { setMode(mode === "login" ? "signup" : "login"); setStatus("idle"); }}
+            style={{ color: "var(--accent)", fontWeight: 600, cursor: "pointer" }}
+          >
+            {mode === "login" ? "S'inscrire" : "Se connecter"}
+          </span>
+        </p>
       </div>
     </div>
   );

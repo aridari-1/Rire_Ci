@@ -3,206 +3,132 @@
 import { useState } from "react";
 
 const PERKS = [
-  "Accès à toutes les vidéos exclusives 🔒",
-  "Badge fan sur ton profil ⭐",
-  "Nouvelles vidéos en avant-première 🎬",
-  "Message de remerciement du comédien 💌",
+  { icon: "ti-lock-open", text: "Accès à toutes les vidéos exclusives" },
+  { icon: "ti-star", text: "Badge fan sur ton profil" },
+  { icon: "ti-bell", text: "Nouvelles vidéos en avant-première" },
+  { icon: "ti-heart", text: "Message de remerciement du comédien" },
 ];
 
 export default function SubscribeModal({ comedian, onClose, onSuccess }) {
   const [email, setEmail] = useState("");
-  const [step, setStep] = useState("choose"); // choose | loading | success | error
+  const [step, setStep] = useState("choose");
   const [errorMsg, setErrorMsg] = useState("");
 
   async function handleSubscribe() {
     if (!email) return;
     setStep("loading");
-
     try {
       const res = await fetch("/api/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          comedianId: comedian.id,
-          comedianName: comedian.name,
-        }),
+        body: JSON.stringify({ email, comedianId: comedian.id, comedianName: comedian.name }),
       });
-
       const { authorizationUrl, reference, error } = await res.json();
       if (error) throw new Error(error);
 
-      // Open Paystack popup
       const popup = window.open(authorizationUrl, "_blank", "width=500,height=700");
-
-      // Poll until popup closes
       const timer = setInterval(async () => {
         if (popup?.closed) {
           clearInterval(timer);
           const verifyRes = await fetch(`/api/subscribe/verify?reference=${reference}`);
           const { success } = await verifyRes.json();
-          if (success) {
-            setStep("success");
-          } else {
-            setErrorMsg("Le paiement n'a pas abouti. Réessaie.");
-            setStep("error");
-          }
+          if (success) setStep("success");
+          else { setErrorMsg("Le paiement n'a pas abouti."); setStep("error"); }
         }
       }, 1000);
-
     } catch (err) {
       setErrorMsg(err.message);
       setStep("error");
     }
   }
 
-  const initials = comedian.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+  const initials = comedian.name.split(" ").map((n) => n[0]).join("").toUpperCase();
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      style={{ background: "rgba(0,0,0,0.75)" }}
+      style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div
-        className="w-full rounded-t-2xl px-5 pt-5 pb-10"
-        style={{ background: "#1A1714", maxWidth: 480, border: "0.5px solid #2A2420" }}
-      >
-        <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "#2A2420" }} />
+      <div style={{ width: "100%", maxWidth: 480, background: "var(--bg-2)", borderRadius: "20px 20px 0 0", padding: "20px 20px 40px", border: "0.5px solid var(--border)" }}>
+
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--border)", margin: "0 auto 24px" }} />
 
         {step === "success" && (
-          <div className="text-center py-6">
-            <div style={{ fontSize: 48 }}>⭐</div>
-            <h2 style={{ fontFamily: "Georgia, serif", fontSize: 22, fontWeight: 700, marginTop: 12 }}>
-              Tu es maintenant fan !
-            </h2>
-            <p style={{ color: "#A09890", fontSize: 14, marginTop: 8, lineHeight: 1.6 }}>
-              Bienvenue dans la communauté de{" "}
-              <span style={{ color: "#FFD600", fontWeight: 700 }}>{comedian.name}</span>.
-              Toutes les vidéos exclusives sont débloquées.
+          <div style={{ textAlign: "center", padding: "16px 0" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--accent-muted)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <i className="ti ti-star" style={{ fontSize: 30, color: "var(--accent)" }} aria-hidden="true" />
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Tu es maintenant fan !</h2>
+            <p style={{ color: "var(--text-2)", fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
+              Bienvenue dans la communauté de <span style={{ color: "var(--accent)", fontWeight: 700 }}>{comedian.name}</span>. Toutes les vidéos exclusives sont débloquées.
             </p>
-            <button
-              onClick={onSuccess}
-              className="mt-6 w-full py-3 rounded-xl"
-              style={{ background: "#FFD600", color: "#0E0C0A", fontSize: 15, fontWeight: 700 }}
-            >
+            <button onClick={onSuccess} style={{ width: "100%", padding: "14px", borderRadius: 10, background: "var(--accent)", color: "#fff", border: "none", fontSize: 15, fontWeight: 600 }}>
               Voir le contenu exclusif
             </button>
           </div>
         )}
 
         {step === "error" && (
-          <div className="text-center py-6">
-            <div style={{ fontSize: 48 }}>😕</div>
-            <h2 style={{ fontFamily: "Georgia, serif", fontSize: 20, fontWeight: 700, marginTop: 12 }}>
-              Paiement non complété
-            </h2>
-            <p style={{ color: "#A09890", fontSize: 14, marginTop: 8 }}>{errorMsg}</p>
-            <button
-              onClick={() => setStep("choose")}
-              className="mt-6 w-full py-3 rounded-xl"
-              style={{ background: "#FF6B2B", color: "#fff", fontSize: 15, fontWeight: 700 }}
-            >
+          <div style={{ textAlign: "center", padding: "16px 0" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(255,69,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <i className="ti ti-x" style={{ fontSize: 30, color: "var(--accent)" }} aria-hidden="true" />
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Paiement non complété</h2>
+            <p style={{ color: "var(--text-2)", fontSize: 14, marginBottom: 24 }}>{errorMsg}</p>
+            <button onClick={() => setStep("choose")} style={{ width: "100%", padding: "14px", borderRadius: 10, background: "var(--accent)", color: "#fff", border: "none", fontSize: 15, fontWeight: 600 }}>
               Réessayer
             </button>
           </div>
         )}
 
         {step === "loading" && (
-          <div className="text-center py-10">
-            <div style={{ fontSize: 36 }}>⏳</div>
-            <p style={{ color: "#A09890", fontSize: 14, marginTop: 12 }}>
-              En attente du paiement...
-            </p>
-            <p style={{ color: "#6B6560", fontSize: 12, marginTop: 6 }}>
-              Complète le paiement dans la fenêtre Paystack
-            </p>
+          <div style={{ textAlign: "center", padding: "32px 0" }}>
+            <i className="ti ti-loader" style={{ fontSize: 36, color: "var(--text-3)" }} aria-hidden="true" />
+            <p style={{ color: "var(--text-2)", fontSize: 14, marginTop: 14 }}>En attente du paiement...</p>
+            <p style={{ color: "var(--text-3)", fontSize: 12, marginTop: 6 }}>Complète le paiement dans la fenêtre Paystack</p>
           </div>
         )}
 
         {step === "choose" && (
           <>
             {/* Header */}
-            <div className="text-center">
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center mx-auto"
-                style={{
-                  background: comedian.cover_color,
-                  fontFamily: "Georgia, serif",
-                  fontSize: 20, fontWeight: 700, color: "#fff",
-                }}
-              >
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: comedian.cover_color || "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
                 {initials}
               </div>
-              <h2 style={{ fontFamily: "Georgia, serif", fontSize: 20, fontWeight: 700, marginTop: 10 }}>
-                Fan Pass de {comedian.name}
-              </h2>
-              <div className="flex items-baseline justify-center gap-1 mt-2">
-                <span style={{ fontSize: 30, fontWeight: 700, color: "#FF6B2B", fontFamily: "Georgia, serif" }}>
-                  500
-                </span>
-                <span style={{ fontSize: 14, color: "#A09890" }}>F CFA / mois</span>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 700 }}>Fan Pass · {comedian.name}</h2>
+                <p style={{ fontSize: 13, color: "var(--accent)", fontWeight: 600, marginTop: 2 }}>500 F CFA / mois</p>
               </div>
             </div>
 
             {/* Perks */}
-            <div className="mt-5 rounded-xl overflow-hidden" style={{ border: "0.5px solid #2A2420" }}>
+            <div style={{ borderRadius: 12, background: "var(--bg-3)", overflow: "hidden", marginBottom: 16 }}>
               {PERKS.map((perk, i) => (
-                <div
-                  key={perk}
-                  className="flex items-center gap-3 px-4 py-3"
-                  style={{ borderBottom: i < PERKS.length - 1 ? "0.5px solid #2A2420" : "none" }}
-                >
-                  <span style={{ color: "#FFD600" }}>✓</span>
-                  <span style={{ fontSize: 13, color: "#A09890" }}>{perk}</span>
+                <div key={perk.text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < PERKS.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: "var(--accent-muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <i className={`ti ${perk.icon}`} style={{ fontSize: 15, color: "var(--accent)" }} aria-hidden="true" />
+                  </div>
+                  <span style={{ fontSize: 13, color: "var(--text-2)" }}>{perk.text}</span>
                 </div>
               ))}
             </div>
 
-            {/* Email input */}
-            <input
-              type="email"
-              placeholder="ton@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full mt-4 py-3 px-4 rounded-xl outline-none"
-              style={{
-                background: "#0E0C0A",
-                border: `0.5px solid ${email ? "#FFD600" : "#2A2420"}`,
-                color: "#F5F0EB", fontSize: 14,
-              }}
-            />
+            <input type="email" placeholder="ton@email.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ marginBottom: 12 }} />
 
-            {/* Payment note */}
-            <div
-              className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl"
-              style={{ background: "#0E0C0A", border: "0.5px solid #2A2420" }}
-            >
-              <span style={{ fontSize: 18 }}>📱</span>
-              <span style={{ fontSize: 12, color: "#A09890" }}>
-                Orange Money, MTN MoMo ou carte bancaire · Résiliable à tout moment
-              </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 10, background: "var(--bg-3)", marginBottom: 16 }}>
+              <i className="ti ti-device-mobile" style={{ fontSize: 18, color: "var(--text-3)", flexShrink: 0 }} aria-hidden="true" />
+              <span style={{ fontSize: 12, color: "var(--text-3)" }}>Orange Money, MTN MoMo ou carte · Résiliable à tout moment</span>
             </div>
 
             <button
               onClick={handleSubscribe}
               disabled={!email}
-              className="mt-4 w-full py-4 rounded-xl transition-all active:scale-95"
-              style={{
-                background: email ? "#FFD600" : "#2A2420",
-                color: email ? "#0E0C0A" : "#6B6560",
-                fontSize: 15, fontWeight: 700,
-              }}
+              style={{ width: "100%", padding: "14px", borderRadius: 10, border: "none", background: email ? "var(--accent)" : "var(--bg-3)", color: email ? "#fff" : "var(--text-3)", fontSize: 15, fontWeight: 600, transition: "all 0.15s" }}
             >
               S'abonner pour 500 F / mois
             </button>
-
-            <button onClick={onClose} className="mt-3 w-full py-2"
-              style={{ color: "#6B6560", fontSize: 13 }}>
+            <button onClick={onClose} style={{ width: "100%", padding: "12px", background: "none", border: "none", color: "var(--text-3)", fontSize: 13, marginTop: 6 }}>
               Pas maintenant
             </button>
           </>

@@ -8,18 +8,15 @@ import { useAuth } from "@/lib/AuthContext";
 export default function Dashboard() {
   const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
-
   const [comedian, setComedian] = useState(null);
-  const [stats, setStats] = useState({ totalTips: 0, totalSubscribers: 0, totalVideos: 0, pendingBalance: 0 });
+  const [stats, setStats] = useState({ totalTips: 0, totalSubscribers: 0, totalVideos: 0, balance: 0 });
   const [recentTips, setRecentTips] = useState([]);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/auth");
-    }
+    if (!authLoading && !user) router.push("/auth");
   }, [user, authLoading]);
 
   useEffect(() => {
@@ -28,264 +25,190 @@ export default function Dashboard() {
 
   async function fetchDashboard() {
     setLoading(true);
+    const { data: comedianData } = await supabase.from("comedians").select("*").limit(1).single();
+    if (!comedianData) { setLoading(false); return; }
 
-    // For now we match comedian by email
-    // Later you'll have a proper comedian <-> user link
-    const { data: comedianData } = await supabase
-      .from("comedians")
-      .select("*")
-      .limit(1)
-      .single();
-
-    if (!comedianData) {
-      setLoading(false);
-      return;
-    }
-
-    // Tips
-    const { data: tipsData } = await supabase
-      .from("tips")
-      .select("*")
-      .eq("comedian_id", comedianData.id)
-      .eq("status", "completed")
+    const { data: tipsData } = await supabase.from("tips").select("*")
+      .eq("comedian_id", comedianData.id).eq("status", "completed")
       .order("created_at", { ascending: false });
 
-    // Subscribers
-    const { count: subCount } = await supabase
-      .from("subscriptions")
+    const { count: subCount } = await supabase.from("subscriptions")
       .select("*", { count: "exact", head: true })
-      .eq("comedian_id", comedianData.id)
-      .eq("status", "active");
+      .eq("comedian_id", comedianData.id).eq("status", "active");
 
-    // Videos
-    const { data: videosData } = await supabase
-      .from("videos")
-      .select("*")
-      .eq("comedian_id", comedianData.id)
-      .order("created_at", { ascending: false });
+    const { data: videosData } = await supabase.from("videos").select("*")
+      .eq("comedian_id", comedianData.id).order("created_at", { ascending: false });
 
     const totalTips = tipsData?.reduce((sum, t) => sum + t.amount, 0) || 0;
-    const monthlyFromSubs = (subCount || 0) * 500;
-    // Your platform takes 15% cut on tips, 20% on subs
-    const earnings = Math.round(totalTips * 0.85 + monthlyFromSubs * 0.80);
+    const balance = Math.round(totalTips * 0.85 + (subCount || 0) * 500 * 0.80);
 
     setComedian(comedianData);
-    setStats({
-      totalTips: totalTips,
-      totalSubscribers: subCount || 0,
-      totalVideos: videosData?.length || 0,
-      pendingBalance: earnings,
-    });
+    setStats({ totalTips, totalSubscribers: subCount || 0, totalVideos: videosData?.length || 0, balance });
     setRecentTips(tipsData?.slice(0, 10) || []);
     setVideos(videosData || []);
     setLoading(false);
   }
 
-  if (authLoading || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0E0C0A" }}>
-        <div style={{ textAlign: "center" }}>
-          <h1 style={{ fontFamily: "Georgia, serif", fontSize: 28, fontWeight: 700, color: "#FFD600" }}>
-            rire<span style={{ color: "#FF6B2B" }}>.ci</span>
-          </h1>
-          <p style={{ color: "#6B6560", fontSize: 13, marginTop: 8 }}>Chargement...</p>
-        </div>
-      </div>
-    );
-  }
+  if (authLoading || loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <p style={{ fontSize: 28, fontWeight: 700 }}>rire<span style={{ color: "var(--accent)" }}>.</span>ci</p>
+    </div>
+  );
 
-  if (!comedian) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "#0E0C0A", color: "#F5F0EB" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 48 }}>🎭</div>
-          <h2 style={{ fontFamily: "Georgia, serif", fontSize: 22, fontWeight: 700, marginTop: 12 }}>
-            Aucun profil comédien trouvé
-          </h2>
-          <p style={{ color: "#6B6560", fontSize: 14, marginTop: 8 }}>
-            Contacte l'équipe rire.ci pour créer ton profil.
-          </p>
-          <button
-            onClick={() => router.push("/")}
-            className="mt-6 px-6 py-3 rounded-xl"
-            style={{ background: "#FF6B2B", color: "#fff", fontSize: 14, fontWeight: 700 }}
-          >
-            Retour à l'accueil
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!comedian) return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24 }}>
+      <i className="ti ti-user-off" style={{ fontSize: 40, color: "var(--text-3)" }} aria-hidden="true" />
+      <p style={{ color: "var(--text-2)", textAlign: "center" }}>Aucun profil comédien trouvé.<br />Contacte l'équipe rire.ci.</p>
+      <button onClick={() => router.push("/")} style={{ padding: "10px 20px", borderRadius: 8, background: "var(--accent)", color: "#fff", border: "none", fontWeight: 600 }}>Retour</button>
+    </div>
+  );
 
   const initials = comedian.name.split(" ").map((n) => n[0]).join("").toUpperCase();
 
+  const TABS = [
+    { id: "overview", label: "Aperçu", icon: "ti-chart-bar" },
+    { id: "tips", label: "Tips", icon: "ti-coin" },
+    { id: "videos", label: "Vidéos", icon: "ti-video" },
+  ];
+
   return (
-    <div className="min-h-screen" style={{ background: "#0E0C0A", color: "#F5F0EB" }}>
+    <div style={{ minHeight: "100vh" }}>
 
       {/* Nav */}
-      <nav
-        className="sticky top-0 z-40 flex items-center justify-between px-4 py-3"
-        style={{ background: "rgba(14,12,10,0.92)", backdropFilter: "blur(12px)", borderBottom: "0.5px solid #2A2420" }}
-      >
-        <button onClick={() => router.push("/")} style={{ color: "#FF6B2B", fontSize: 22 }}>←</button>
-        <span style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 700, color: "#FFD600" }}>
-          rire<span style={{ color: "#FF6B2B" }}>.ci</span>
+      <nav style={{
+        position: "sticky", top: 0, zIndex: 40,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 16px",
+        background: "rgba(17,17,20,0.95)", backdropFilter: "blur(12px)",
+        borderBottom: "0.5px solid var(--border)",
+      }}>
+        <span style={{ fontSize: 17, fontWeight: 700 }}>
+          rire<span style={{ color: "var(--accent)" }}>.</span>ci
         </span>
-        <button onClick={logout} style={{ fontSize: 12, color: "#6B6560", fontWeight: 600 }}>
+        <button
+          onClick={logout}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, background: "var(--bg-2)", border: "0.5px solid var(--border)", color: "var(--text-2)", fontSize: 13, fontWeight: 500 }}
+        >
+          <i className="ti ti-logout" style={{ fontSize: 15 }} aria-hidden="true" />
           Déconnexion
         </button>
       </nav>
 
-      <div className="px-4 pb-24">
+      <div style={{ padding: "20px 16px 0" }}>
 
-        {/* Header */}
-        <div className="flex items-center gap-4 mt-6 mb-6">
-          <div
-            style={{
-              width: 56, height: 56, borderRadius: "50%",
-              background: comedian.cover_color,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "Georgia, serif", fontSize: 20, fontWeight: 700, color: "#fff",
-              flexShrink: 0,
-            }}
-          >
+        {/* Profile row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: comedian.cover_color || "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
             {comedian.avatar_url
               ? <img src={comedian.avatar_url} alt={comedian.name} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
               : initials}
           </div>
           <div>
-            <h1 style={{ fontFamily: "Georgia, serif", fontSize: 20, fontWeight: 700 }}>
-              Bonjour, {comedian.name.split(" ")[0]} 👋
-            </h1>
-            <p style={{ fontSize: 12, color: "#6B6560", marginTop: 2 }}>Tableau de bord comédien</p>
+            <p style={{ fontSize: 16, fontWeight: 700 }}>Bonjour, {comedian.name.split(" ")[0]} 👋</p>
+            <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>Tableau de bord</p>
           </div>
         </div>
 
         {/* Balance card */}
-        <div
-          className="rounded-2xl p-5 mb-6"
-          style={{
-            background: "linear-gradient(135deg, #FF6B2B22 0%, #FFD60011 100%)",
-            border: "0.5px solid #FF6B2B44",
-          }}
-        >
-          <p style={{ fontSize: 12, color: "#A09890", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Solde disponible (après commission)
+        <div style={{ borderRadius: 14, background: "var(--bg-2)", border: "0.5px solid var(--border)", padding: "20px", marginBottom: 16 }}>
+          <p style={{ fontSize: 12, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+            Solde disponible
           </p>
-          <p style={{ fontFamily: "Georgia, serif", fontSize: 36, fontWeight: 700, color: "#FFD600", marginTop: 4 }}>
-            {stats.pendingBalance.toLocaleString("fr-FR")}
-            <span style={{ fontSize: 16, color: "#A09890", marginLeft: 6 }}>F CFA</span>
+          <p style={{ fontSize: 34, fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
+            {stats.balance.toLocaleString("fr-FR")}
+            <span style={{ fontSize: 16, color: "var(--text-3)", marginLeft: 6, fontWeight: 400 }}>F CFA</span>
           </p>
-          <p style={{ fontSize: 12, color: "#6B6560", marginTop: 6 }}>
-            Tips reçus · {stats.totalTips.toLocaleString("fr-FR")} F + Abonnements · {stats.totalSubscribers} × 400 F
+          <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 8 }}>
+            Après commission rire.ci (15% tips · 20% abonnements)
           </p>
         </div>
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        {/* Stat cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 20 }}>
           {[
-            { label: "Tips reçus", value: stats.totalTips.toLocaleString("fr-FR") + " F", icon: "💛" },
-            { label: "Abonnés", value: stats.totalSubscribers, icon: "⭐" },
-            { label: "Vidéos", value: stats.totalVideos, icon: "🎬" },
+            { label: "Tips reçus", value: stats.totalTips.toLocaleString("fr-FR") + " F", icon: "ti-coin", color: "#FF4500" },
+            { label: "Abonnés", value: stats.totalSubscribers, icon: "ti-star", color: "#F39C12" },
+            { label: "Vidéos", value: stats.totalVideos, icon: "ti-video", color: "#3498DB" },
           ].map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-xl p-3 text-center"
-              style={{ background: "#1A1714", border: "0.5px solid #2A2420" }}
-            >
-              <div style={{ fontSize: 20 }}>{stat.icon}</div>
-              <div style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 700, marginTop: 4 }}>
-                {stat.value}
-              </div>
-              <div style={{ fontSize: 10, color: "#6B6560", marginTop: 2 }}>{stat.label}</div>
+            <div key={stat.label} style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", padding: "14px 10px", textAlign: "center" }}>
+              <i className={`ti ${stat.icon}`} style={{ fontSize: 20, color: stat.color }} aria-hidden="true" />
+              <p style={{ fontSize: 15, fontWeight: 700, marginTop: 6 }}>{stat.value}</p>
+              <p style={{ fontSize: 10, color: "var(--text-3)", marginTop: 3 }}>{stat.label}</p>
             </div>
           ))}
         </div>
+      </div>
 
-        {/* Tabs */}
-        <div
-          className="flex rounded-xl overflow-hidden mb-4"
-          style={{ background: "#1A1714", padding: 3, gap: 3 }}
-        >
-          {[
-            { id: "overview", label: "Aperçu" },
-            { id: "tips", label: "Tips" },
-            { id: "videos", label: "Vidéos" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="flex-1 py-2 rounded-lg transition-all"
-              style={{
-                background: activeTab === tab.id ? "#FF6B2B" : "transparent",
-                color: activeTab === tab.id ? "#fff" : "#6B6560",
-                fontSize: 12, fontWeight: 700,
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      {/* Tabs */}
+      <div style={{ display: "flex", borderBottom: "0.5px solid var(--border)", position: "sticky", top: 62, background: "var(--bg)", zIndex: 30 }}>
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              flex: 1, padding: "12px 0",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              background: "none", border: "none",
+              color: activeTab === tab.id ? "var(--text-1)" : "var(--text-3)",
+              fontSize: 13, fontWeight: activeTab === tab.id ? 600 : 400,
+              borderBottom: activeTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
+            }}
+          >
+            <i className={`ti ${tab.icon}`} style={{ fontSize: 15 }} aria-hidden="true" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: "16px 16px 24px" }}>
 
         {/* Overview tab */}
         {activeTab === "overview" && (
-          <div className="flex flex-col gap-3">
-            <div
-              className="rounded-xl p-4"
-              style={{ background: "#1A1714", border: "0.5px solid #2A2420" }}
-            >
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#F5F0EB", marginBottom: 12 }}>
-                📊 Résumé des revenus
-              </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Earnings breakdown */}
+            <div style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", overflow: "hidden" }}>
               {[
-                { label: "Tips bruts", value: stats.totalTips.toLocaleString("fr-FR") + " F", note: "avant commission" },
-                { label: "Commission rire.ci (15%)", value: "− " + Math.round(stats.totalTips * 0.15).toLocaleString("fr-FR") + " F", note: "" },
-                { label: "Abonnements (80%)", value: "+ " + Math.round(stats.totalSubscribers * 500 * 0.80).toLocaleString("fr-FR") + " F", note: `${stats.totalSubscribers} abonnés × 400 F` },
-              ].map((row) => (
-                <div
-                  key={row.label}
-                  className="flex justify-between items-center py-2"
-                  style={{ borderBottom: "0.5px solid #2A2420" }}
-                >
+                { label: "Tips bruts", sub: "avant commission", value: stats.totalTips.toLocaleString("fr-FR") + " F" },
+                { label: "Commission (15%)", sub: "", value: "− " + Math.round(stats.totalTips * 0.15).toLocaleString("fr-FR") + " F" },
+                { label: "Abonnements nets", sub: `${stats.totalSubscribers} × 400 F`, value: Math.round(stats.totalSubscribers * 400).toLocaleString("fr-FR") + " F" },
+              ].map((row, i) => (
+                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "0.5px solid var(--border)" }}>
                   <div>
-                    <p style={{ fontSize: 13, color: "#A09890" }}>{row.label}</p>
-                    {row.note && <p style={{ fontSize: 10, color: "#6B6560" }}>{row.note}</p>}
+                    <p style={{ fontSize: 13, color: "var(--text-1)" }}>{row.label}</p>
+                    {row.sub && <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{row.sub}</p>}
                   </div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "#F5F0EB" }}>{row.value}</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>{row.value}</p>
                 </div>
               ))}
-              <div className="flex justify-between items-center pt-3">
-                <p style={{ fontSize: 14, fontWeight: 700, color: "#FFD600" }}>Total net</p>
-                <p style={{ fontSize: 16, fontWeight: 700, color: "#FFD600" }}>
-                  {stats.pendingBalance.toLocaleString("fr-FR")} F
-                </p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px" }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>Total net</p>
+                <p style={{ fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>{stats.balance.toLocaleString("fr-FR")} F</p>
               </div>
             </div>
 
-            {/* Quick links */}
-            <div
-              className="rounded-xl overflow-hidden"
-              style={{ border: "0.5px solid #2A2420" }}
-            >
+            {/* Quick actions */}
+            <div style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", overflow: "hidden" }}>
               {[
-                { label: "Voir mon profil public", action: () => router.push(`/comedien/${comedian.slug}`), icon: "👤" },
-                { label: "Ajouter une vidéo", action: () => router.push("/upload-video"), icon: "🎬" },
+                { label: "Voir mon profil public", icon: "ti-user", action: () => router.push(`/comedien/${comedian.slug}`) },
+                { label: "Ajouter une vidéo", icon: "ti-upload", action: () => router.push("/upload-video") },
               ].map((item, i) => (
                 <button
                   key={item.label}
                   onClick={item.action}
-                  className="w-full flex items-center justify-between px-4 py-4"
                   style={{
-                    background: "#1A1714",
-                    borderBottom: i === 0 ? "0.5px solid #2A2420" : "none",
-                    color: "#F5F0EB",
+                    width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "16px", background: "none", border: "none",
+                    borderBottom: i === 0 ? "0.5px solid var(--border)" : "none",
+                    color: "var(--text-1)", textAlign: "left",
                   }}
                 >
-                  <div className="flex items-center gap-3">
-                    <span style={{ fontSize: 18 }}>{item.icon}</span>
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>{item.label}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--accent-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <i className={`ti ${item.icon}`} style={{ fontSize: 17, color: "var(--accent)" }} aria-hidden="true" />
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 500 }}>{item.label}</span>
                   </div>
-                  <span style={{ color: "#FF6B2B", fontSize: 16 }}>→</span>
+                  <i className="ti ti-arrow-right" style={{ fontSize: 16, color: "var(--text-3)" }} aria-hidden="true" />
                 </button>
               ))}
             </div>
@@ -294,97 +217,74 @@ export default function Dashboard() {
 
         {/* Tips tab */}
         {activeTab === "tips" && (
-          <div>
-            {recentTips.length === 0 ? (
-              <div className="text-center py-16" style={{ color: "#6B6560" }}>
-                <div style={{ fontSize: 40 }}>💛</div>
-                <p style={{ marginTop: 8, fontSize: 14 }}>Pas encore de tips reçus.</p>
-                <p style={{ fontSize: 12, marginTop: 4 }}>Partage ton profil pour en recevoir !</p>
-              </div>
-            ) : (
-              <div
-                className="rounded-xl overflow-hidden"
-                style={{ border: "0.5px solid #2A2420" }}
-              >
-                {recentTips.map((tip, i) => (
-                  <div
-                    key={tip.id}
-                    className="flex items-center justify-between px-4 py-3"
-                    style={{ background: "#1A1714", borderBottom: i < recentTips.length - 1 ? "0.5px solid #2A2420" : "none" }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span style={{ fontSize: 20 }}>💛</span>
-                      <div>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: "#F5F0EB" }}>
-                          Fan anonyme
-                        </p>
-                        <p style={{ fontSize: 11, color: "#6B6560" }}>
-                          {new Date(tip.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
-                        </p>
-                      </div>
+          recentTips.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "48px 0", color: "var(--text-3)" }}>
+              <i className="ti ti-coin-off" style={{ fontSize: 36 }} aria-hidden="true" />
+              <p style={{ marginTop: 10, fontSize: 14 }}>Pas encore de tips reçus.</p>
+              <p style={{ fontSize: 12, marginTop: 4 }}>Partage ton profil pour en recevoir !</p>
+            </div>
+          ) : (
+            <div style={{ borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", overflow: "hidden" }}>
+              {recentTips.map((tip, i) => (
+                <div key={tip.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: i < recentTips.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--accent-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <i className="ti ti-coin" style={{ fontSize: 17, color: "var(--accent)" }} aria-hidden="true" />
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: "#FFD600" }}>
-                        +{tip.amount.toLocaleString("fr-FR")} F
-                      </p>
-                      <p style={{ fontSize: 10, color: "#6B6560" }}>
-                        net: {Math.round(tip.amount * 0.85).toLocaleString("fr-FR")} F
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 500 }}>Fan anonyme</p>
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
+                        {new Date(tip.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
                       </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>+{tip.amount.toLocaleString("fr-FR")} F</p>
+                    <p style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>net: {Math.round(tip.amount * 0.85).toLocaleString("fr-FR")} F</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         )}
 
         {/* Videos tab */}
         {activeTab === "videos" && (
           <div>
             <button
-              onClick={() => router.push("/upload")}
-              className="w-full py-3 rounded-xl mb-4 transition-all active:scale-95"
-              style={{ background: "#FF6B2B", color: "#fff", fontSize: 14, fontWeight: 700 }}
+              onClick={() => router.push("/upload-video")}
+              style={{ width: "100%", padding: "14px", borderRadius: 10, background: "var(--accent)", color: "#fff", border: "none", fontSize: 14, fontWeight: 600, marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
             >
-              + Ajouter une vidéo
+              <i className="ti ti-upload" style={{ fontSize: 16 }} aria-hidden="true" />
+              Ajouter une vidéo
             </button>
-
             {videos.length === 0 ? (
-              <div className="text-center py-16" style={{ color: "#6B6560" }}>
-                <div style={{ fontSize: 40 }}>🎬</div>
-                <p style={{ marginTop: 8, fontSize: 14 }}>Aucune vidéo pour l'instant.</p>
+              <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-3)" }}>
+                <i className="ti ti-video-off" style={{ fontSize: 36 }} aria-hidden="true" />
+                <p style={{ marginTop: 10, fontSize: 14 }}>Aucune vidéo pour l'instant.</p>
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {videos.map((video) => (
-                  <div
-                    key={video.id}
-                    className="flex items-center gap-3 p-3 rounded-xl"
-                    style={{ background: "#1A1714", border: "0.5px solid #2A2420" }}
-                  >
-                    <div
-                      style={{
-                        width: 56, height: 56, borderRadius: 10, flexShrink: 0,
-                        background: "#2A1F1A",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 20,
-                      }}
-                    >
-                      🎬
+                  <div key={video.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)" }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 8, background: "#1E1624", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <i className="ti ti-video" style={{ fontSize: 20, color: "var(--text-3)" }} aria-hidden="true" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 13, fontWeight: 600, color: "#F5F0EB", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {video.title}
-                      </p>
-                      <p style={{ fontSize: 11, color: "#6B6560", marginTop: 2 }}>
-                        {new Date(video.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                        {" · "}
-                        {video.is_locked ? "🔒 Exclusif" : "🌍 Public"}
-                      </p>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{video.title}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                        <span style={{ fontSize: 11, color: video.is_locked ? "var(--accent)" : "var(--text-3)" }}>
+                          {video.is_locked ? "Exclusif" : "Public"}
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--text-3)" }}>·</span>
+                        <span style={{ fontSize: 11, color: "var(--text-3)" }}>
+                          {new Date(video.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                        </span>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: "#A09890", flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-3)", flexShrink: 0 }}>
                       {(video.views || 0).toLocaleString("fr-FR")} vues
-                    </div>
+                    </span>
                   </div>
                 ))}
               </div>

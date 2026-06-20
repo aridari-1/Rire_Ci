@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-const POPULAR_TAGS = ["Sketchs", "Maquis", "Nouchi", "Fonctionnaires", "Famille", "Politique", "Musique"];
+const TAGS = ["Sketchs", "Maquis", "Nouchi", "Fonctionnaires", "Famille", "Politique", "Musique"];
 
 export default function SearchPage() {
   const router = useRouter();
@@ -17,257 +17,161 @@ export default function SearchPage() {
   const search = useCallback(async (q, tag) => {
     setLoading(true);
     setSearched(true);
-
-    let queryBuilder = supabase
-      .from("comedians")
-      .select("*");
-
-    if (q.trim()) {
-      queryBuilder = queryBuilder.or(
-        `name.ilike.%${q}%,tagline.ilike.%${q}%,bio.ilike.%${q}%`
-      );
-    }
-
-    if (tag) {
-      queryBuilder = queryBuilder.contains("tags", [tag]);
-    }
-
-    const { data } = await queryBuilder.order("created_at", { ascending: false });
+    let qb = supabase.from("comedians").select("*");
+    if (q.trim()) qb = qb.or(`name.ilike.%${q}%,tagline.ilike.%${q}%,bio.ilike.%${q}%`);
+    if (tag) qb = qb.contains("tags", [tag]);
+    const { data } = await qb.order("created_at", { ascending: false });
     setResults(data || []);
     setLoading(false);
   }, []);
 
-  // Search as user types
   useEffect(() => {
     if (query.trim().length >= 2) {
-      const timeout = setTimeout(() => search(query, selectedTag), 350);
-      return () => clearTimeout(timeout);
+      const t = setTimeout(() => search(query, selectedTag), 350);
+      return () => clearTimeout(t);
     }
-    if (query.trim().length === 0 && !selectedTag) {
-      setResults([]);
-      setSearched(false);
-    }
+    if (!query.trim() && !selectedTag) { setResults([]); setSearched(false); }
   }, [query, selectedTag, search]);
 
-  // Search when tag is selected
   useEffect(() => {
-    if (selectedTag) {
-      search(query, selectedTag);
-    }
+    if (selectedTag) search(query, selectedTag);
   }, [selectedTag]);
 
-  function handleTagClick(tag) {
-    if (selectedTag === tag) {
-      setSelectedTag(null);
-      setResults([]);
-      setSearched(false);
-    } else {
-      setSelectedTag(tag);
-    }
+  function highlight(text) {
+    if (!query.trim() || !text) return text;
+    const regex = new RegExp(`(${query.trim()})`, "gi");
+    return text.split(regex).map((part, i) =>
+      regex.test(part)
+        ? <mark key={i} style={{ background: "rgba(255,69,0,0.2)", color: "var(--accent)", borderRadius: 3, padding: "0 2px" }}>{part}</mark>
+        : part
+    );
   }
 
   return (
-    <div className="min-h-screen" style={{ background: "#0E0C0A", color: "#F5F0EB" }}>
+    <div style={{ minHeight: "100vh" }}>
 
       {/* Nav */}
-      <nav
-        className="sticky top-0 z-40 flex items-center justify-between px-4 py-3"
-        style={{ background: "rgba(14,12,10,0.92)", backdropFilter: "blur(12px)", borderBottom: "0.5px solid #2A2420" }}
-      >
-        <button onClick={() => router.push("/")} style={{ color: "#FF6B2B", fontSize: 22 }}>←</button>
-        <span style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 700, color: "#FFD600" }}>
-          rire<span style={{ color: "#FF6B2B" }}>.ci</span>
-        </span>
-        <div style={{ width: 22 }} />
-      </nav>
-
-      <div className="px-4 pt-6 pb-24">
-
-        {/* Search input */}
-        <div style={{ position: "relative", marginBottom: 20 }}>
-          <span
-            style={{
-              position: "absolute", left: 14, top: "50%",
-              transform: "translateY(-50%)",
-              fontSize: 16, color: "#6B6560",
-            }}
-          >
-            🔍
-          </span>
+      <nav style={{
+        position: "sticky", top: 0, zIndex: 40,
+        padding: "14px 16px",
+        background: "rgba(17,17,20,0.95)", backdropFilter: "blur(12px)",
+        borderBottom: "0.5px solid var(--border)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg-2)", borderRadius: 10, padding: "10px 14px", border: "0.5px solid var(--border)" }}>
+          <i className="ti ti-search" style={{ fontSize: 16, color: "var(--text-3)", flexShrink: 0 }} aria-hidden="true" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher un comédien..."
             autoFocus
-            style={{
-              width: "100%", padding: "14px 14px 14px 42px",
-              borderRadius: 14, background: "#1A1714",
-              border: `0.5px solid ${query ? "#FF6B2B" : "#2A2420"}`,
-              color: "#F5F0EB", fontSize: 15, outline: "none",
-            }}
+            style={{ flex: 1, background: "none", border: "none", padding: 0, fontSize: 15, color: "var(--text-1)", outline: "none" }}
           />
-          {query.length > 0 && (
-            <button
-              onClick={() => { setQuery(""); setResults([]); setSearched(false); }}
-              style={{
-                position: "absolute", right: 14, top: "50%",
-                transform: "translateY(-50%)",
-                color: "#6B6560", fontSize: 18, background: "none", border: "none", cursor: "pointer",
-              }}
-            >
-              ✕
+          {query && (
+            <button onClick={() => { setQuery(""); setResults([]); setSearched(false); }} style={{ background: "none", border: "none", color: "var(--text-3)", fontSize: 18, padding: 0, lineHeight: 1 }}>
+              <i className="ti ti-x" style={{ fontSize: 16 }} aria-hidden="true" />
             </button>
           )}
         </div>
+      </nav>
 
-        {/* Popular tags */}
-        <div className="mb-6">
-          <p style={{ fontSize: 12, color: "#6B6560", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-            Parcourir par thème
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {POPULAR_TAGS.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => handleTagClick(tag)}
-                className="px-4 py-2 rounded-full transition-all active:scale-95"
-                style={{
-                  background: selectedTag === tag ? "#FF6B2B" : "#1A1714",
-                  color: selectedTag === tag ? "#fff" : "#A09890",
-                  border: `0.5px solid ${selectedTag === tag ? "#FF6B2B" : "#2A2420"}`,
-                  fontSize: 13, fontWeight: 600,
-                }}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
+      <div style={{ padding: "16px 16px 24px" }}>
+
+        {/* Tags */}
+        <p style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+          Parcourir par thème
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+          {TAGS.map((tag) => (
+            <button
+              key={tag}
+              onClick={() => {
+                if (selectedTag === tag) { setSelectedTag(null); setResults([]); setSearched(false); }
+                else setSelectedTag(tag);
+              }}
+              style={{
+                padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 500, border: "none",
+                background: selectedTag === tag ? "var(--accent)" : "var(--bg-2)",
+                color: selectedTag === tag ? "#fff" : "var(--text-2)",
+                outline: selectedTag !== tag ? "0.5px solid var(--border)" : "none",
+              }}
+            >
+              {tag}
+            </button>
+          ))}
         </div>
 
-        {/* Results */}
+        {/* Loading */}
         {loading && (
-          <div className="text-center py-12" style={{ color: "#6B6560" }}>
-            <p style={{ fontSize: 14 }}>Recherche en cours...</p>
+          <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-3)" }}>
+            <i className="ti ti-loader" style={{ fontSize: 28 }} aria-hidden="true" />
+            <p style={{ marginTop: 8, fontSize: 14 }}>Recherche...</p>
           </div>
         )}
 
+        {/* No results */}
         {!loading && searched && results.length === 0 && (
-          <div className="text-center py-16">
-            <div style={{ fontSize: 40 }}>😕</div>
+          <div style={{ textAlign: "center", padding: "48px 0" }}>
+            <i className="ti ti-mood-sad" style={{ fontSize: 36, color: "var(--text-3)" }} aria-hidden="true" />
             <p style={{ fontSize: 15, fontWeight: 600, marginTop: 10 }}>Aucun résultat</p>
-            <p style={{ fontSize: 13, color: "#6B6560", marginTop: 6 }}>
-              Essaie un autre nom ou un autre thème.
-            </p>
+            <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 6 }}>Essaie un autre nom ou thème.</p>
           </div>
         )}
 
+        {/* Results */}
         {!loading && results.length > 0 && (
           <div>
-            <p style={{ fontSize: 12, color: "#6B6560", marginBottom: 12 }}>
+            <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 12 }}>
               {results.length} comédien{results.length > 1 ? "s" : ""} trouvé{results.length > 1 ? "s" : ""}
-              {selectedTag ? ` pour "${selectedTag}"` : ""}
+              {selectedTag ? ` · "${selectedTag}"` : ""}
             </p>
-            <div className="flex flex-col gap-3">
-              {results.map((comedian) => (
-                <ComedianResult
-                  key={comedian.id}
-                  comedian={comedian}
-                  query={query}
-                  selectedTag={selectedTag}
-                  onClick={() => router.push(`/comedien/${comedian.slug}`)}
-                />
-              ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {results.map((c) => {
+                const initials = c.name.split(" ").map((n) => n[0]).join("").toUpperCase();
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => router.push(`/comedien/${c.slug}`)}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px", borderRadius: 12, background: "var(--bg-2)", border: "0.5px solid var(--border)", cursor: "pointer" }}
+                  >
+                    <div style={{ width: 48, height: 48, borderRadius: "50%", background: c.cover_color || "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                      {c.avatar_url ? <img src={c.avatar_url} alt={c.name} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} /> : initials}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <p style={{ fontSize: 15, fontWeight: 600 }}>{highlight(c.name)}</p>
+                        {c.is_verified && <i className="ti ti-rosette-discount-check" style={{ fontSize: 15, color: "var(--accent)", flexShrink: 0 }} aria-hidden="true" />}
+                      </div>
+                      {c.tagline && <p style={{ fontSize: 12, color: "var(--accent)", marginTop: 2, fontWeight: 500 }}>{highlight(c.tagline)}</p>}
+                      {c.tags?.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                          {c.tags.map((tag) => (
+                            <span key={tag} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: tag === selectedTag ? "rgba(255,69,0,0.15)" : "var(--bg-3)", color: tag === selectedTag ? "var(--accent)" : "var(--text-3)", border: `0.5px solid ${tag === selectedTag ? "rgba(255,69,0,0.3)" : "var(--border)"}` }}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <i className="ti ti-chevron-right" style={{ fontSize: 16, color: "var(--text-3)", flexShrink: 0 }} aria-hidden="true" />
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {!searched && (
-          <div className="text-center py-16">
-            <div style={{ fontSize: 48 }}>🎭</div>
-            <p style={{ fontSize: 15, fontWeight: 600, marginTop: 12, color: "#F5F0EB" }}>
-              Trouve ton comédien préféré
-            </p>
-            <p style={{ fontSize: 13, color: "#6B6560", marginTop: 6, lineHeight: 1.6 }}>
+        {/* Empty state */}
+        {!searched && !loading && (
+          <div style={{ textAlign: "center", padding: "48px 0" }}>
+            <i className="ti ti-masks-theater" style={{ fontSize: 40, color: "var(--text-3)" }} aria-hidden="true" />
+            <p style={{ fontSize: 15, fontWeight: 600, marginTop: 12 }}>Trouve ton comédien préféré</p>
+            <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 6, lineHeight: 1.6 }}>
               Tape un nom ou choisis un thème<br />pour découvrir des talents.
             </p>
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Result card ───────────────────────────────────────────────────────────────
-function ComedianResult({ comedian, query, selectedTag, onClick }) {
-  const initials = comedian.name.split(" ").map((n) => n[0]).join("").toUpperCase();
-
-  // Highlight matching text
-  function highlight(text) {
-    if (!query.trim() || !text) return text;
-    const regex = new RegExp(`(${query.trim()})`, "gi");
-    const parts = text.split(regex);
-    return parts.map((part, i) =>
-      regex.test(part)
-        ? <mark key={i} style={{ background: "#FF6B2B33", color: "#FF6B2B", borderRadius: 3, padding: "0 2px" }}>{part}</mark>
-        : part
-    );
-  }
-
-  return (
-    <div
-      onClick={onClick}
-      className="flex items-center gap-4 p-4 rounded-xl cursor-pointer active:scale-95 transition-transform"
-      style={{ background: "#1A1714", border: "0.5px solid #2A2420" }}
-    >
-      {/* Avatar */}
-      <div
-        style={{
-          width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
-          background: comedian.cover_color,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 700, color: "#fff",
-        }}
-      >
-        {comedian.avatar_url
-          ? <img src={comedian.avatar_url} alt={comedian.name} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-          : initials}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p style={{ fontSize: 15, fontWeight: 700, color: "#F5F0EB" }}>
-            {highlight(comedian.name)}
-          </p>
-          {comedian.is_verified && (
-            <span style={{ fontSize: 10, color: "#FF6B2B", fontWeight: 700 }}>✓</span>
-          )}
-        </div>
-        <p style={{ fontSize: 12, color: "#FFD600", fontStyle: "italic", marginTop: 1 }}>
-          {highlight(comedian.tagline)}
-        </p>
-        {comedian.tags?.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {comedian.tags.map((tag) => (
-              <span
-                key={tag}
-                style={{
-                  fontSize: 10, padding: "2px 8px", borderRadius: 999,
-                  background: tag === selectedTag ? "#FF6B2B22" : "#0E0C0A",
-                  color: tag === selectedTag ? "#FF6B2B" : "#6B6560",
-                  border: `0.5px solid ${tag === selectedTag ? "#FF6B2B44" : "#2A2420"}`,
-                  fontWeight: tag === selectedTag ? 700 : 400,
-                }}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <span style={{ color: "#FF6B2B", fontSize: 16, flexShrink: 0 }}>→</span>
     </div>
   );
 }
